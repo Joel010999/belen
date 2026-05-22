@@ -14,14 +14,14 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@prisma/client": "^7.7.0",
+    "@prisma/client": "^6.19.3",
     "@prisma/config": "^7.7.0",
     "cors": "^2.8.6",
     "csv-parser": "^3.2.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "multer": "^2.1.1",
-    "prisma": "^7.7.0"
+    "prisma": "^6.19.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
