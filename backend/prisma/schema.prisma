@@ -1,0 +1,389 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Client {
+  id        Int               @id @default(autoincrement())
+  code      String            @unique
+  name      String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  orders    ProductionOrder[]
+}
+
+model Product {
+  id          Int               @id @default(autoincrement())
+  code        String            @unique
+  name        String
+  description String?
+  unit        String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  stock       CurrentStock?
+  orders      ProductionOrder[]
+}
+
+model Supply {
+  id           Int           @id @default(autoincrement())
+  code         String        @unique
+  name         String
+  type         String
+  unit         String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  consumptions Consumption[]
+  stock        CurrentStock?
+}
+
+model ProductionOrder {
+  id             Int                 @id @default(autoincrement())
+  orderNumber    String              @unique
+  date           DateTime            @default(now())
+  clientId       Int
+  productId      Int
+  sampleId       Int?
+  plannedQty     Float
+  producedQty    Float               @default(0)
+  unit           String
+  deliveryDate   DateTime?
+  priority       Int                 @default(1)
+  status         String              @default("EN_PROCESO")
+  observations   String?
+  creatorId      Int
+  machineId      Int?
+  operatorsText  String?
+  closedAt       DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  attachments    Attachment[]
+  colorOrders    ColorOrder[]
+  consumptions   Consumption[]
+  finalControl   FinalControl?
+  user           User                @relation(fields: [creatorId], references: [id])
+  machine        Machine?            @relation("CreatedOnMachine", fields: [machineId], references: [id])
+  operators      OrderOperator[]
+  sample         Sample?             @relation(fields: [sampleId], references: [id])
+  product        Product             @relation(fields: [productId], references: [id])
+  client         Client              @relation(fields: [clientId], references: [id])
+  processes      ProductionProcess[]
+  result         ProductionResult?
+  stockMovements StockMovement[]
+  technicalSpec  TechnicalSpec?
+}
+
+model OrderOperator {
+  id         Int             @id @default(autoincrement())
+  orderId    Int
+  operatorId Int
+  order      ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  operator   Operator        @relation(fields: [operatorId], references: [id])
+
+  @@unique([orderId, operatorId])
+}
+
+model TechnicalSpec {
+  id               Int             @id @default(autoincrement())
+  orderId          Int             @unique
+  materialMeasure  String?
+  cut              String?
+  lamina           String?
+  meters           Float?
+  tube             String?
+  colorCount       Int?
+  pie              String?
+  designName       String?
+  cabeza           String?
+  printingType     String?
+  cliseCenter      String?
+  cliseLeft        String?
+  cliseRight       String?
+  tacaRight        String?
+  tacaLeft         String?
+  techObservations String?
+  order            ProductionOrder @relation(fields: [orderId], references: [id])
+}
+
+model ColorOrder {
+  id           Int             @id @default(autoincrement())
+  orderId      Int
+  sequence     Int
+  colorName    String
+  supplyId     Int?
+  formula      String?
+  observations String?
+  order        ProductionOrder @relation(fields: [orderId], references: [id])
+}
+
+model Consumption {
+  id           Int             @id @default(autoincrement())
+  orderId      Int
+  supplyId     Int
+  plannedQty   Float
+  realQty      Float           @default(0)
+  unit         String
+  type         String
+  observations String?
+  supply       Supply          @relation(fields: [supplyId], references: [id])
+  order        ProductionOrder @relation(fields: [orderId], references: [id])
+}
+
+model ProductionProcess {
+  id             Int                @id @default(autoincrement())
+  orderId        Int
+  type           String
+  status         String
+  machineId      Int?
+  operatorId     Int?
+  startTime      DateTime?
+  endTime        DateTime?
+  scrapKg        Float              @default(0)
+  observations   String?
+  materialLots   MaterialLot[]
+  laminationData ProcessLamination?
+  printingData   ProcessPrinting?
+  refiladoData   ProcessRefilado?
+  operator       Operator?          @relation(fields: [operatorId], references: [id])
+  machine        Machine?           @relation(fields: [machineId], references: [id])
+  order          ProductionOrder    @relation(fields: [orderId], references: [id])
+}
+
+model MaterialLot {
+  id              Int               @id @default(autoincrement())
+  processId       Int
+  lotNumber       String
+  kg              Float
+  initialMeters   Float
+  addedMeters     Float             @default(0)
+  finalMeters     Float             @default(0)
+  totalUsedMeters Float
+  observations    String?
+  process         ProductionProcess @relation(fields: [processId], references: [id], onDelete: Cascade)
+}
+
+model ProcessPrinting {
+  id              Int                    @id @default(autoincrement())
+  processId       Int                    @unique
+  exitSense       String?
+  coilDiameter    Float?
+  processedMeters Float?
+  coilCount       Int?
+  perFlecha       String?
+  process         ProductionProcess      @relation(fields: [processId], references: [id])
+  colors          ProcessPrintingColor[]
+}
+
+model ProcessPrintingColor {
+  id         Int             @id @default(autoincrement())
+  printingId Int
+  sequence   Int
+  colorName  String
+  endValue   Float?
+  diffValue  Float?
+  calcValue  Float?
+  printing   ProcessPrinting @relation(fields: [printingId], references: [id])
+}
+
+model ProcessLamination {
+  id              Int               @id @default(autoincrement())
+  processId       Int               @unique
+  materialId      Int?
+  adhesiveId      Int?
+  reticulantId    Int?
+  diluentId       Int?
+  mixProportion   String?
+  processedMeters Float?
+  process         ProductionProcess @relation(fields: [processId], references: [id])
+}
+
+model ProcessRefilado {
+  id              Int               @id @default(autoincrement())
+  processId       Int               @unique
+  exitSense       String?
+  tacaRight       String?
+  tacaLeft        String?
+  deCabeza        Boolean?
+  deTripa         Boolean?
+  coilDiameter    Float?
+  processedMeters Float?
+  coilCount       Int?
+  process         ProductionProcess @relation(fields: [processId], references: [id])
+}
+
+model FinalControl {
+  id           Int                @id @default(autoincrement())
+  orderId      Int                @unique
+  date         DateTime
+  operatorId   Int
+  approved     Boolean            @default(false)
+  observations String?
+  operator     Operator           @relation(fields: [operatorId], references: [id])
+  order        ProductionOrder    @relation(fields: [orderId], references: [id])
+  items        FinalControlItem[]
+}
+
+model FinalControlItem {
+  id          Int          @id @default(autoincrement())
+  controlId   Int
+  item        String
+  confort     Boolean
+  textValue   String?
+  observation String?
+  control     FinalControl @relation(fields: [controlId], references: [id])
+}
+
+model ProductionResult {
+  id                 Int             @id @default(autoincrement())
+  orderId            Int             @unique
+  productId          Int
+  producedQty        Float
+  unit               String
+  pouchBagQty        Int?
+  corteFondoBagQty   Int?
+  corteLateralBagQty Int?
+  coilQty            Int?
+  finalKg            Float?
+  finalMeters        Float?
+  totalScrapKg       Float?
+  observations       String?
+  readyForExport     Boolean         @default(false)
+  exported           Boolean         @default(false)
+  exportDate         DateTime?
+  order              ProductionOrder @relation(fields: [orderId], references: [id])
+}
+
+model StockMovement {
+  id            Int              @id @default(autoincrement())
+  date          DateTime         @default(now())
+  type          String
+  source        String?
+  orderId       Int?
+  itemType      String
+  productId     Int?
+  supplyId      Int?
+  qty           Float
+  unit          String
+  sign          Int
+  observations  String?
+  pendingExport Boolean          @default(true)
+  exported      Boolean          @default(false)
+  exportDate    DateTime?
+  batchId       Int?
+  batch         ExportBatch?     @relation(fields: [batchId], references: [id])
+  order         ProductionOrder? @relation(fields: [orderId], references: [id])
+}
+
+model CurrentStock {
+  id           Int      @id @default(autoincrement())
+  itemType     String
+  productId    Int?     @unique
+  supplyId     Int?     @unique
+  stockActual  Float    @default(0)
+  unit         String
+  lastUpdate   DateTime @default(now())
+  updateSource String?
+  supply       Supply?  @relation(fields: [supplyId], references: [id])
+  product      Product? @relation(fields: [productId], references: [id])
+}
+
+model ImportLog {
+  id            Int      @id @default(autoincrement())
+  date          DateTime @default(now())
+  userId        Int
+  entityType    String
+  fileName      String
+  readCount     Int
+  insertedCount Int
+  updatedCount  Int
+  errorCount    Int
+  errorLog      String?
+  status        String
+  user          User     @relation(fields: [userId], references: [id])
+}
+
+model ExportBatch {
+  id            Int             @id @default(autoincrement())
+  date          DateTime        @default(now())
+  userId        Int
+  type          String
+  fileName      String
+  movementCount Int
+  user          User            @relation(fields: [userId], references: [id])
+  movements     StockMovement[]
+}
+
+model User {
+  id            Int               @id @default(autoincrement())
+  username      String            @unique
+  passwordHash  String
+  name          String
+  email         String?
+  role          String
+  operatorId    Int?              @unique
+  machineId     Int?              @unique
+  active        Boolean           @default(true)
+  attachments   Attachment[]
+  exportBatches ExportBatch[]
+  importLogs    ImportLog[]
+  ordersCreated ProductionOrder[]
+  operator      Operator?         @relation(fields: [operatorId], references: [id])
+  machine       Machine?          @relation(fields: [machineId], references: [id])
+}
+
+model Operator {
+  id        Int                 @id @default(autoincrement())
+  legajo    String              @unique
+  firstName String
+  lastName  String
+  role      String
+  active    Boolean             @default(true)
+  controls  FinalControl[]
+  processes ProductionProcess[]
+  orders    OrderOperator[]
+  user      User?
+}
+
+model Machine {
+  id            Int                 @id @default(autoincrement())
+  code          String              @unique
+  name          String
+  type          String
+  active        Boolean             @default(true)
+  processes     ProductionProcess[]
+  ordersCreated ProductionOrder[]   @relation("CreatedOnMachine")
+  user          User?
+}
+
+model Sample {
+  id           Int               @id @default(autoincrement())
+  clientId     Int
+  productId    Int
+  code         String            @unique
+  name         String
+  description  String?
+  frontImage   String?
+  backImage    String?
+  artFile      String?
+  observations String?
+  active       Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  orders       ProductionOrder[]
+}
+
+model Attachment {
+  id           Int             @id @default(autoincrement())
+  entityType   String
+  entityId     Int
+  fileName     String
+  fileUrl      String
+  fileType     String?
+  observations String?
+  createdAt    DateTime        @default(now())
+  userId       Int
+  order        ProductionOrder @relation(fields: [entityId], references: [id])
+  user         User            @relation(fields: [userId], references: [id])
+}
+
