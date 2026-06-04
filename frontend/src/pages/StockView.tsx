@@ -32,8 +32,8 @@ export const StockView: React.FC = () => {
                 ]);
                 
                 const allItems = [
-                    ...pRes.data.map((p: any) => ({ ...p, category: 'PRODUCTO', stockLevel: p.stock?.stockActual || 0 })),
-                    ...sRes.data.map((s: any) => ({ ...s, category: s.type || 'INSUMO', stockLevel: s.stock?.stockActual || 0 }))
+                    ...pRes.data.map((p: any) => ({ ...p, category: 'PRODUCTO', stockLevel: p.stock?.stockActual || 0, minStock: p.stock?.minStock || 100 })),
+                    ...sRes.data.map((s: any) => ({ ...s, category: s.type || 'INSUMO', stockLevel: s.stock?.stockActual || 0, minStock: s.stock?.minStock || 100 }))
                 ];
                 setItems(allItems);
             } catch (err) {
@@ -44,6 +44,21 @@ export const StockView: React.FC = () => {
         };
         fetchStock();
     }, []);
+
+    const updateMinStock = async (item: any, newMin: string) => {
+        try {
+            await api.put('/stock/config', {
+                productId: item.category === 'PRODUCTO' ? item.id : null,
+                supplyId: item.category !== 'PRODUCTO' ? item.id : null,
+                itemType: item.category,
+                unit: item.unit || 'UN',
+                minStock: newMin
+            });
+            setItems(prev => prev.map(i => i.id === item.id && i.category === item.category ? { ...i, minStock: parseFloat(newMin) } : i));
+        } catch (e) {
+            alert('Error al actualizar el stock mínimo');
+        }
+    };
 
     const filteredItems = items.filter(item => {
         const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -110,6 +125,7 @@ export const StockView: React.FC = () => {
                             <th style={{ padding: '1.25rem 1.5rem' }}>Artículo</th>
                             <th>Categoría</th>
                             <th>Stock Disponible</th>
+                            <th>Stock Mínimo</th>
                             <th>Estado</th>
                             <th>Precio (USD)</th>
                             <th style={{ paddingRight: '1.5rem', textAlign: 'right' }}>Última Act.</th>
@@ -117,7 +133,7 @@ export const StockView: React.FC = () => {
                     </thead>
                     <tbody>
                         {filteredItems.map(item => {
-                            const isLow = item.stockLevel < 100;
+                            const isLow = item.stockLevel < (item.minStock || 100);
                             return (
                                 <tr key={`${item.category}-${item.id}`} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }}>
                                     <td style={{ padding: '1.25rem 1.5rem' }}>
@@ -134,6 +150,15 @@ export const StockView: React.FC = () => {
                                             <span style={{ fontWeight: 800, fontSize: '1.1rem' }}>{item.stockLevel.toLocaleString()}</span>
                                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.unit}</span>
                                         </div>
+                                    </td>
+                                    <td>
+                                        <input 
+                                            type="number" 
+                                            defaultValue={item.minStock} 
+                                            onBlur={(e) => updateMinStock(item, e.target.value)}
+                                            className="input" 
+                                            style={{ width: '80px', padding: '0.4rem', fontSize: '0.875rem' }} 
+                                        />
                                     </td>
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

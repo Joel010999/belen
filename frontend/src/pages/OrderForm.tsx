@@ -47,8 +47,8 @@ export const OrderForm: React.FC = () => {
   const [formData, setFormData] = useState({
     orderNumber: '',
     clientId: '',
-    productId: '',
-    plannedQty: '',
+    deliveryDate: '',
+    products: [{ productId: '', plannedQty: '' }],
     unit: 'Metros',
     creatorId: user?.id?.toString() || '1', 
     machineId: user?.machine?.id?.toString() || '',
@@ -70,24 +70,13 @@ export const OrderForm: React.FC = () => {
       cliseRight: '',
     },
     colorOrders: [
-      { sequence: 1, colorName: '', formula: '', insumoId: '' }
+      { sequence: 1, colorName: '', formula: '', insumoId: '', changesToConsider: '' }
     ],
+    specifications: '',
     observations: ''
   });
 
-  // Production Stage State
-  const [activeStage, setActiveStage] = useState<'IMPRESION' | 'LAMINACION' | 'REFILADO'>('IMPRESION');
-  const [stageData, setStageData] = useState({
-      machineId: user?.machine?.id?.toString() || "",
-      operatorId: "",
-      exitSense: "Sentido A",
-      processedMeters: "",
-      scrapKg: "",
-      observations: ""
-  });
-  const [materialLots, setMaterialLots] = useState<any[]>([
-    { lotNumber: '', kg: '', initialMeters: '', addedMeters: '0', finalMeters: '0', totalUsed: 0, observations: '' }
-  ]);
+  // Control de Produccion removido según requerimiento
 
   useEffect(() => {
     const fetchData = async () => {
@@ -112,13 +101,16 @@ export const OrderForm: React.FC = () => {
           setFormData({
             orderNumber: order.orderNumber,
             clientId: order.clientId?.toString() || '',
-            productId: order.productId?.toString() || '',
-            plannedQty: order.plannedQty?.toString() || '',
+            deliveryDate: order.deliveryDate ? new Date(order.deliveryDate).toISOString().split('T')[0] : '',
+            products: order.products?.length > 0
+              ? order.products.map((p: any) => ({ productId: p.productId.toString(), plannedQty: p.plannedQty }))
+              : [{ productId: order.productId?.toString() || '', plannedQty: order.plannedQty?.toString() || '' }],
             unit: order.unit || 'Metros',
             creatorId: order.creatorId?.toString() || '1',
             machineId: order.machineId?.toString() || '',
             operatorIds: order.operators?.map((o: any) => o.operatorId.toString()) || [],
             operatorsText: order.operatorsText || '',
+            specifications: order.specifications || '',
             observations: order.technicalSpec?.observations || '',
             technicalSpec: {
               materialMeasure: order.technicalSpec?.materialMeasure || '',
@@ -139,8 +131,9 @@ export const OrderForm: React.FC = () => {
               sequence: c.sequence,
               colorName: c.colorName,
               formula: c.formula || '',
-              insumoId: c.supplyId?.toString() || ''
-            })) : [{ sequence: 1, colorName: '', formula: '', insumoId: '' }]
+              insumoId: c.supplyId?.toString() || '',
+              changesToConsider: c.changesToConsider || ''
+            })) : [{ sequence: 1, colorName: '', formula: '', insumoId: '', changesToConsider: '' }]
           });
         }
       } catch (err) {
@@ -148,10 +141,6 @@ export const OrderForm: React.FC = () => {
       }
     };
     fetchData();
-
-    if (user?.role === 'MACHINE' && user.machine) {
-        setActiveStage(user.machine.type as any);
-    }
   }, [id, isEditing, user]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -170,8 +159,22 @@ export const OrderForm: React.FC = () => {
     }
   };
 
-  const handleStageInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setStageData({ ...stageData, [e.target.name]: e.target.value });
+  const handleProductChange = (index: number, field: string, value: string) => {
+    const newProducts = [...formData.products];
+    (newProducts[index] as any)[field] = value;
+    setFormData(prev => ({ ...prev, products: newProducts }));
+  };
+
+  const addProductRow = () => {
+    setFormData(prev => ({
+      ...prev,
+      products: [...prev.products, { productId: '', plannedQty: '' }]
+    }));
+  };
+
+  const removeProductRow = (index: number) => {
+    const newProducts = formData.products.filter((_, i) => i !== index);
+    setFormData(prev => ({ ...prev, products: newProducts }));
   };
 
   const handleColorChange = (index: number, field: string, value: string) => {
@@ -185,7 +188,7 @@ export const OrderForm: React.FC = () => {
       ...prev,
       colorOrders: [
         ...prev.colorOrders,
-        { sequence: prev.colorOrders.length + 1, colorName: '', formula: '', insumoId: '' }
+        { sequence: prev.colorOrders.length + 1, colorName: '', formula: '', insumoId: '', changesToConsider: '' }
       ]
     }));
   };
@@ -193,24 +196,6 @@ export const OrderForm: React.FC = () => {
   const removeColorRow = (index: number) => {
     const newColors = formData.colorOrders.filter((_, i) => i !== index);
     setFormData(prev => ({ ...prev, colorOrders: newColors }));
-  };
-
-  const addMaterialRow = () => {
-    setMaterialLots([...materialLots, { lotNumber: '', kg: '', initialMeters: '', addedMeters: '0', finalMeters: '0', totalUsed: 0, observations: '' }]);
-  };
-
-  const removeMaterialRow = (index: number) => {
-    setMaterialLots(materialLots.filter((_, i) => i !== index));
-  };
-
-  const handleMaterialChange = (index: number, field: string, value: string) => {
-    const newLots = [...materialLots];
-    newLots[index][field] = value;
-    const initial = parseFloat(newLots[index].initialMeters) || 0;
-    const added = parseFloat(newLots[index].addedMeters) || 0;
-    const final = parseFloat(newLots[index].finalMeters) || 0;
-    newLots[index].totalUsed = Math.max(0, initial + added - final);
-    setMaterialLots(newLots);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -232,24 +217,6 @@ export const OrderForm: React.FC = () => {
       } else {
         const res = await api.post(`/orders`, formData);
         savedOrderId = res.data.id;
-      }
-
-      // Si cargaron datos de produccion
-      if (stageData.processedMeters || stageData.scrapKg || materialLots[0].lotNumber !== '') {
-          const payload = {
-            orderId: savedOrderId,
-            type: activeStage,
-            machineId: stageData.machineId || formData.machineId,
-            operatorId: stageData.operatorId,
-            scrapKg: stageData.scrapKg,
-            observations: stageData.observations,
-            materialLots: (activeStage === 'IMPRESION' || activeStage === 'LAMINACION') ? materialLots.filter(l => l.lotNumber !== '') : [],
-            specificData: {
-              exitSense: stageData.exitSense,
-              processedMeters: stageData.processedMeters,
-            }
-          };
-          await api.post(`/orders/processes`, payload);
       }
 
       setSuccess(true);
@@ -343,19 +310,54 @@ export const OrderForm: React.FC = () => {
           </select>
         </div>
         <div>
-          <label className="label">Producto Terminado</label>
-          <select name="productId" value={formData.productId} onChange={handleInputChange} className="input" required>
-            <option value="">Seleccione un producto...</option>
-            {products.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.code})
-              </option>
-            ))}
-          </select>
+          <label className="label">Fecha de Entrega (Obligatorio)</label>
+          <input name="deliveryDate" value={formData.deliveryDate} onChange={handleInputChange} type="date" className="input" required />
         </div>
-        <div>
-          <label className="label">Cantidad Planificada</label>
-          <input name="plannedQty" value={formData.plannedQty} onChange={handleInputChange} type="number" className="input" placeholder="0.00" required />
+        <div style={{ gridColumn: 'span 2' }}>
+          <h4 style={{ marginBottom: '1rem', color: 'var(--text-muted)' }}>Productos de la Orden</h4>
+          {formData.products.map((prod, index) => (
+            <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label className="label">Producto Terminado</label>
+                <select value={prod.productId} onChange={(e) => handleProductChange(index, 'productId', e.target.value)} className="input" required>
+                  <option value="">Seleccione un producto...</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Cantidad Planificada</label>
+                <input value={prod.plannedQty} onChange={(e) => handleProductChange(index, 'plannedQty', e.target.value)} type="text" className="input" placeholder="Ej: 100 kg, 5000 un" required />
+              </div>
+              {formData.products.length > 1 && (
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <button type="button" onClick={() => removeProductRow(index)} className="btn" style={{ padding: '0.8rem', color: 'var(--danger)', background: 'rgba(239, 68, 68, 0.1)' }}>
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          <button type="button" onClick={addProductRow} className="btn" style={{ marginTop: '0.5rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Plus size={18} /> Añadir otro producto
+          </button>
+        </div>
+      </FormSection>
+
+      <FormSection title="Especificaciones / Observaciones" icon={<ClipboardList size={24} />}>
+        <div style={{ gridColumn: 'span 2' }}>
+          <label className="label">Detalle de especificaciones u observaciones generales</label>
+          <textarea 
+            name="specifications" 
+            value={formData.specifications} 
+            onChange={handleInputChange} 
+            className="input" 
+            style={{ height: '100px' }} 
+            placeholder="Especificaciones importantes..."
+          ></textarea>
         </div>
       </FormSection>
 
@@ -416,7 +418,8 @@ export const OrderForm: React.FC = () => {
                 <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>#</th>
                 <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Nombre del Color</th>
                 <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Fórmula Manual</th>
-                <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Insumo ID</th>
+                <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Número de lote</th>
+                <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Cambios a tener en cuenta</th>
                 <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Acción</th>
               </tr>
             </thead>
@@ -449,6 +452,13 @@ export const OrderForm: React.FC = () => {
                     </select>
                   </td>
                   <td style={{ padding: '0.5rem' }}>
+                    <input 
+                      value={color.changesToConsider || ''} 
+                      onChange={(e) => handleColorChange(index, 'changesToConsider', e.target.value)}
+                      type="text" className="input" placeholder="Cambios..." 
+                    />
+                  </td>
+                  <td style={{ padding: '0.5rem' }}>
                     <button 
                       type="button"
                       onClick={() => removeColorRow(index)}
@@ -470,124 +480,6 @@ export const OrderForm: React.FC = () => {
             <Plus size={18} /> Añadir Color
           </button>
         </div>
-      </FormSection>
-
-      <FormSection title="Control de Producción en Planta" icon={<Play size={24} />}>
-            <div style={{ gridColumn: 'span 2' }}>
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-                <StageTab 
-                  active={activeStage === 'IMPRESION'} 
-                  onClick={() => user?.role === 'ADMIN' && setActiveStage('IMPRESION')} 
-                  icon={<Layers />} 
-                  title="IMPRESIÓN" 
-                  step="1" 
-                  disabled={user?.role === 'MACHINE' && user.machine?.type !== 'IMPRESION'}
-                />
-                <StageTab 
-                  active={activeStage === 'LAMINACION'} 
-                  onClick={() => user?.role === 'ADMIN' && setActiveStage('LAMINACION')} 
-                  icon={<Droplets />} 
-                  title="LAMINACIÓN" 
-                  step="2" 
-                  disabled={user?.role === 'MACHINE' && user.machine?.type !== 'LAMINACION'}
-                />
-                <StageTab 
-                  active={activeStage === 'REFILADO'} 
-                  onClick={() => user?.role === 'ADMIN' && setActiveStage('REFILADO')} 
-                  icon={<Scissors />} 
-                  title="REFILADO" 
-                  step="3" 
-                  disabled={user?.role === 'MACHINE' && user.machine?.type !== 'REFILADO'}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                    <label className="label">Máquina Usada (Producción)</label>
-                    <select 
-                      name="machineId" 
-                      value={stageData.machineId} 
-                      onChange={handleStageInputChange} 
-                      className="input"
-                    >
-                        <option value="">Seleccionar máquina...</option>
-                        {machines.filter(m => m.type === activeStage).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className="label">Operario de Producción</label>
-                    <select name="operatorId" value={stageData.operatorId} onChange={handleStageInputChange} className="input">
-                        <option value="">Seleccionar operario...</option>
-                        {operators.map(o => <option key={o.id} value={o.id}>{o.firstName} {o.lastName}</option>)}
-                    </select>
-                </div>
-                {(activeStage === 'IMPRESION' || activeStage === 'REFILADO') && (
-                    <div>
-                        <label className="label">Sentido Salida</label>
-                        <select name="exitSense" value={stageData.exitSense} onChange={handleStageInputChange} className="input">
-                            <option>Sentido A</option>
-                            <option>Sentido B</option>
-                        </select>
-                    </div>
-                )}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div>
-                        <label className="label">Metros Procesados</label>
-                        <input name="processedMeters" value={stageData.processedMeters} onChange={handleStageInputChange} type="number" className="input" placeholder="0" />
-                    </div>
-                    <div>
-                        <label className="label">Scrap Generado (Kg)</label>
-                        <input name="scrapKg" value={stageData.scrapKg} onChange={handleStageInputChange} type="number" className="input" placeholder="0" />
-                    </div>
-                </div>
-
-                {(activeStage === 'IMPRESION' || activeStage === 'LAMINACION') && (
-                  <div style={{ gridColumn: 'span 2', marginTop: '1.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                      <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--primary)' }}>Material Utilizado / Lotes</h4>
-                      <button type="button" onClick={addMaterialRow} className="btn" style={{ fontSize: '0.75rem', padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid var(--primary)', color: 'var(--primary)' }}>
-                        <Plus size={14} /> Agregar Lote
-                      </button>
-                    </div>
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                        <thead>
-                          <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-                            <th style={{ padding: '0.5rem' }}>Lote</th>
-                            <th>Kg</th>
-                            <th>Inic. (m)</th>
-                            <th>Agreg. (m)</th>
-                            <th>Sobr. (m)</th>
-                            <th>Total (m)</th>
-                            <th></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {materialLots.map((lot, idx) => (
-                            <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                              <td style={{ padding: '0.5rem 0.2rem' }}><input className="input" style={{ padding: '0.3rem', fontSize: '0.75rem' }} value={lot.lotNumber} onChange={(e) => handleMaterialChange(idx, 'lotNumber', e.target.value)} placeholder="N° Lote" /></td>
-                              <td style={{ width: '60px' }}><input className="input" style={{ padding: '0.3rem', fontSize: '0.75rem' }} value={lot.kg} onChange={(e) => handleMaterialChange(idx, 'kg', e.target.value)} type="number" /></td>
-                              <td style={{ width: '80px' }}><input className="input" style={{ padding: '0.3rem', fontSize: '0.75rem' }} value={lot.initialMeters} onChange={(e) => handleMaterialChange(idx, 'initialMeters', e.target.value)} type="number" /></td>
-                              <td style={{ width: '80px' }}><input className="input" style={{ padding: '0.3rem', fontSize: '0.75rem' }} value={lot.addedMeters} onChange={(e) => handleMaterialChange(idx, 'addedMeters', e.target.value)} type="number" /></td>
-                              <td style={{ width: '80px' }}><input className="input" style={{ padding: '0.3rem', fontSize: '0.75rem' }} value={lot.finalMeters} onChange={(e) => handleMaterialChange(idx, 'finalMeters', e.target.value)} type="number" /></td>
-                              <td style={{ fontWeight: 800, color: 'var(--primary)', textAlign: 'center' }}>{lot.totalUsed}</td>
-                              <td style={{ textAlign: 'right' }}>
-                                <button type="button" onClick={() => removeMaterialRow(idx)} style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={16} /></button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-                
-                <div style={{ gridColumn: 'span 2' }}>
-                  <label className="label">Observaciones Adicionales / Novedades de Turno</label>
-                  <textarea name="observations" value={stageData.observations} onChange={handleStageInputChange} className="input" style={{ height: '80px' }} placeholder="Opcional. Detalle aquí si hubo roturas, demoras, etc."></textarea>
-                </div>
-              </div>
-            </div>
       </FormSection>
     </form>
   );

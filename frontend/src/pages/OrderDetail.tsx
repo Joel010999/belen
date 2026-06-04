@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
-import { ClipboardList as Clipboard, Ruler, Layers, ArrowLeft, Play, FileText, Cpu, Users, Edit } from 'lucide-react';
+import { ClipboardList as Clipboard, Ruler, Layers, ArrowLeft, Play, FileText, Cpu, Users, Edit, ShieldCheck } from 'lucide-react';
 import { FormSection } from '../components/FormSection';
 
 export const OrderDetail: React.FC = () => {
@@ -87,6 +87,22 @@ export const OrderDetail: React.FC = () => {
             <DataField label="Tipo Impresión" value={order?.technicalSpec?.printingType} />
             <DataField label="Pie" value={order?.technicalSpec?.pie} />
             <DataField label="Clisé Centro" value={order?.technicalSpec?.cliseCenter} />
+            <div style={{ gridColumn: 'span 2', marginTop: '1rem' }}>
+              <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Especificaciones / Observaciones</p>
+              <p style={{ fontSize: '0.875rem', fontWeight: 500, whiteSpace: 'pre-line' }}>{order.specifications || order.observations || '-'}</p>
+            </div>
+          </FormSection>
+
+          <FormSection title="Aprobaciones y Control" icon={<ShieldCheck size={24} />}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', gridColumn: 'span 2' }}>
+              <ApprovalCheck orderId={order.id} field="approvedPrinting" label="Impresión" initial={order.approvedPrinting} />
+              <ApprovalCheck orderId={order.id} field="approvedLamination" label="Laminación" initial={order.approvedLamination} />
+              <ApprovalCheck orderId={order.id} field="approvedRefilado" label="Refilación" initial={order.approvedRefilado} />
+            </div>
+            <div style={{ gridColumn: 'span 2', display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+              <button className="btn" style={{ flex: 1, padding: '0.75rem', border: '1px solid var(--primary)', color: 'var(--primary)' }}>Checklist de Proceso</button>
+              <button className="btn" style={{ flex: 1, padding: '0.75rem', border: '1px solid var(--primary)', color: 'var(--primary)' }}>Control de Calidad</button>
+            </div>
           </FormSection>
         </div>
 
@@ -97,9 +113,23 @@ export const OrderDetail: React.FC = () => {
                 Resumen de Lote
             </h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <p style={{ fontSize: '0.875rem' }}>Producto: <b>{order.product?.name}</b></p>
-                <p style={{ fontSize: '0.875rem' }}>Objetivo: <b>{order.plannedQty.toLocaleString()} {order.unit}</b></p>
                 <p style={{ fontSize: '0.875rem' }}>Fecha Alta: <b>{new Date(order.createdAt).toLocaleDateString()}</b></p>
+                {order.deliveryDate && (
+                  <p style={{ fontSize: '0.875rem' }}>Fecha Entrega: <b>{new Date(order.deliveryDate).toLocaleDateString()}</b></p>
+                )}
+                <div style={{ marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+                  {order.products?.length > 0 ? order.products.map((p: any, idx: number) => (
+                    <div key={idx} style={{ marginBottom: '0.5rem' }}>
+                      <p style={{ fontSize: '0.875rem' }}>Producto {idx + 1}: <b>{p.product?.name}</b></p>
+                      <p style={{ fontSize: '0.875rem' }}>Objetivo: <b>{p.plannedQty}</b></p>
+                    </div>
+                  )) : (
+                    <div>
+                      <p style={{ fontSize: '0.875rem' }}>Producto: <b>{order.product?.name}</b></p>
+                      <p style={{ fontSize: '0.875rem' }}>Objetivo: <b>{order.plannedQty}</b></p>
+                    </div>
+                  )}
+                </div>
             </div>
           </div>
 
@@ -111,6 +141,8 @@ export const OrderDetail: React.FC = () => {
                             <th style={{ padding: '0.5rem' }}>#</th>
                             <th>Color</th>
                             <th>Fórmula</th>
+                            <th>Nº Lote</th>
+                            <th>Cambios</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -119,6 +151,8 @@ export const OrderDetail: React.FC = () => {
                                 <td style={{ padding: '0.6rem 0.5rem', fontWeight: 800, color: 'var(--primary)' }}>{color.sequence}°</td>
                                 <td>{color.colorName}</td>
                                 <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{color.formula || '-'}</td>
+                                <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{color.supplyId || '-'}</td>
+                                <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{color.changesToConsider || '-'}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -169,3 +203,27 @@ const DataField = ({ label, value }: { label: string, value: string }) => (
         <p style={{ fontSize: '1rem', fontWeight: 600 }}>{value || '-'}</p>
     </div>
 );
+
+const ApprovalCheck = ({ orderId, field, label, initial }: any) => {
+  const [checked, setChecked] = useState(initial);
+  const [loading, setLoading] = useState(false);
+
+  const toggle = async () => {
+    setLoading(true);
+    try {
+      await api.put(`/orders/${orderId}`, { [field]: !checked });
+      setChecked(!checked);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', opacity: loading ? 0.5 : 1 }}>
+      <input type="checkbox" checked={checked} onChange={toggle} disabled={loading} style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }} />
+      <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>{label}</span>
+    </label>
+  );
+};

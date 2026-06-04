@@ -21,26 +21,60 @@ export const createOrder = async (orderData: any) => {
     machineId,
     operatorIds,
     technicalSpec,
-    colorOrders
+    colorOrders,
+    products,
+    deliveryDate,
+    specifications,
+    observations
   } = orderData;
 
   const finalCreatorId = creatorId ? parseInt(creatorId) : 1;
 
   return await prisma.$transaction(async (tx) => {
+    // Handle fallback if single product sent instead of array
+    const firstProduct = products && products.length > 0 ? products[0] : { productId, plannedQty };
+    const finalProductId = firstProduct?.productId ? parseInt(firstProduct.productId) : (productId ? parseInt(productId) : null);
+    const finalPlannedQty = firstProduct?.plannedQty ? String(firstProduct.plannedQty) : (plannedQty ? String(plannedQty) : null);
+
     // 1. Create the base order
     const order = await tx.productionOrder.create({
       data: {
         orderNumber,
         clientId: parseInt(clientId),
-        productId: parseInt(productId),
-        plannedQty: parseSafeFloat(plannedQty) || 0,
+        productId: finalProductId,
+        plannedQty: finalPlannedQty,
         unit,
+        deliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
         creatorId: finalCreatorId,
         machineId: machineId ? parseInt(machineId) : null,
         operatorsText: orderData.operatorsText,
-        status: 'EN_PROCESO',
+        status: 'Órdenes por realizar',
+        specifications,
+        observations
       }
     });
+
+    // 1.1 Create OrderProduct records
+    if (products && Array.isArray(products)) {
+      for (const prod of products) {
+        if (!prod.productId) continue;
+        await tx.orderProduct.create({
+          data: {
+            orderId: order.id,
+            productId: parseInt(prod.productId),
+            plannedQty: String(prod.plannedQty)
+          }
+        });
+      }
+    } else if (finalProductId) {
+      await tx.orderProduct.create({
+        data: {
+          orderId: order.id,
+          productId: finalProductId,
+          plannedQty: finalPlannedQty || ""
+        }
+      });
+    }
 
     // 2. Associate operators if provided
     if (operatorIds && Array.isArray(operatorIds)) {
@@ -55,18 +89,21 @@ export const createOrder = async (orderData: any) => {
     }
 
     // 3. Record stock movement (As 'RESERVA' or just audit)
-    await tx.stockMovement.create({
-      data: {
-        type: 'EGRESO',
-        itemType: 'PRODUCTO',
-        productId: parseInt(productId),
-        qty: parseSafeFloat(plannedQty) || 0,
-        unit: unit || 'UN',
-        sign: 0, 
-        orderId: order.id,
-        observations: `Reserva para orden ${orderNumber}`
-      }
-    });
+    const qtyNum = parseSafeFloat(finalPlannedQty?.replace(/[^0-9.]/g, '')) || 0;
+    if (finalProductId && qtyNum > 0) {
+      await tx.stockMovement.create({
+        data: {
+          type: 'EGRESO',
+          itemType: 'PRODUCTO',
+          productId: finalProductId,
+          qty: qtyNum,
+          unit: unit || 'UN',
+          sign: 0, 
+          orderId: order.id,
+          observations: `Reserva para orden ${orderNumber}`
+        }
+      });
+    }
 
     // 4. Create the technical specification linked to the order
     if (technicalSpec) {
@@ -100,6 +137,7 @@ export const createOrder = async (orderData: any) => {
             colorName: color.colorName,
             formula: color.formula,
             supplyId: parseSafeInt(color.insumoId),
+            changesToConsider: color.changesToConsider,
           }
         });
       }
@@ -126,6 +164,7 @@ export const getAllOrders = async (machineId?: number) => {
     include: {
       client: true,
       product: true,
+      products: { include: { product: true } },
       technicalSpec: true,
       colorOrders: true,
       machine: true,
@@ -147,6 +186,7 @@ export const getOrderById = async (id: number) => {
     include: {
       client: true,
       product: true,
+      products: { include: { product: true } },
       technicalSpec: true,
       colorOrders: true,
       machine: true,
@@ -155,6 +195,13 @@ export const getOrderById = async (id: number) => {
           operator: true
         }
       },
+      checklists: {
+        include: {
+          items: true,
+          operator: true
+        }
+      },
+      qualityControls: true,
       processes: {
         include: {
           machine: true,
@@ -320,9 +367,9 @@ export const getDashboardStats = async (machineId?: number) => {
     allProcesses,
     recentOrders
   ] = await Promise.all([
-    prisma.productionOrder.count({ where: { ...whereOrder, status: 'EN_PROCESO' } }),
-    prisma.productionOrder.count({ where: { ...whereOrder, status: 'FINALIZADA' } }),
-    prisma.productionOrder.count({ where: { ...whereOrder, status: 'PENDIENTE_CONTROL' } }),
+    prisma.productionOrder.count({ where: { ...whereOrder, status: 'Órdenes por realizar' } }),
+    prisma.productionOrder.count({ where: { ...whereOrder, status: 'Finalizadas' } }),
+    prisma.productionOrder.count({ where: { ...whereOrder, status: 'En proceso' } }),
     prisma.stockMovement.count({ where: { exported: false } }),
     prisma.currentStock.findMany(),
     prisma.productionProcess.findMany({ 
@@ -343,7 +390,7 @@ export const getDashboardStats = async (machineId?: number) => {
   ]);
 
   const availableStock = stockItems.reduce((acc, item) => acc + item.stockActual, 0);
-  const lowStockAlerts = stockItems.filter(item => item.stockActual < 100).length;
+  const lowStockAlerts = stockItems.filter(item => item.stockActual < (item.minStock || 100)).length;
   
   let totalProcessedMeters = 0;
   let totalScrapKg = 0;
@@ -391,15 +438,16 @@ export const finalizeOrder = async (id: number) => {
     // Update order status
     const updatedOrder = await tx.productionOrder.update({
       where: { id },
-      data: { status: 'FINALIZADA' }
+      data: { status: 'Finalizadas' }
     });
 
     // Calculate total produced (could be plannedQty or based on last stage)
-    const qtyProduced = order.plannedQty;
+    const qtyProduced = parseSafeFloat(order.plannedQty?.replace(/[^0-9.]/g, '')) || 0;
 
-    // Increase product stock
-    await tx.currentStock.upsert({
-      where: { productId: order.productId },
+    if (order.productId && qtyProduced > 0) {
+      // Increase product stock
+      await tx.currentStock.upsert({
+        where: { productId: order.productId },
       update: {
         stockActual: { increment: qtyProduced },
         lastUpdate: new Date()
@@ -413,19 +461,20 @@ export const finalizeOrder = async (id: number) => {
       }
     });
 
-    // Record stock movement
-    await tx.stockMovement.create({
-      data: {
-        type: 'INGRESO',
-        itemType: 'PRODUCTO',
-        productId: order.productId,
-        qty: qtyProduced,
-        unit: order.unit,
-        sign: 1,
-        orderId: order.id,
-        observations: `Producción finalizada de orden ${order.orderNumber}`
-      }
-    });
+      // Record stock movement
+      await tx.stockMovement.create({
+        data: {
+          type: 'INGRESO',
+          itemType: 'PRODUCTO',
+          productId: order.productId,
+          qty: qtyProduced,
+          unit: order.unit,
+          sign: 1,
+          orderId: order.id,
+          observations: `Producción finalizada de orden ${order.orderNumber}`
+        }
+      });
+    }
 
     return updatedOrder;
   });
@@ -565,17 +614,22 @@ export const updateOrder = async (id: number, orderData: any) => {
   } = orderData;
 
   return await prisma.$transaction(async (tx) => {
-    const order = await tx.productionOrder.update({
-      where: { id },
-      data: {
+    const dataToUpdate: any = {
         orderNumber,
         clientId: parseInt(clientId),
         productId: parseInt(productId),
-        plannedQty: parseSafeFloat(plannedQty) || 0,
+        plannedQty: plannedQty ? String(plannedQty) : null,
         unit,
         machineId: machineId ? parseInt(machineId) : null,
         operatorsText,
-      }
+    };
+    if (orderData.approvedPrinting !== undefined) dataToUpdate.approvedPrinting = orderData.approvedPrinting;
+    if (orderData.approvedLamination !== undefined) dataToUpdate.approvedLamination = orderData.approvedLamination;
+    if (orderData.approvedRefilado !== undefined) dataToUpdate.approvedRefilado = orderData.approvedRefilado;
+
+    const order = await tx.productionOrder.update({
+      where: { id },
+      data: dataToUpdate
     });
 
     if (technicalSpec) {

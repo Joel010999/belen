@@ -1,0 +1,2406 @@
+﻿diff --git a/README.md b/README.md
+index 2765672..901edb7 100644
+--- a/README.md
++++ b/README.md
+@@ -1,6 +1,6 @@
+-# Bel├®n Industrial Management System
++# Silcar Industrial Management System
+ 
+-Sistema de gesti├│n de producci├│n industrial para f├íbricas de empaquetado flexible.
++<p>Esta secci├│n est├í en desarrollo para el sistema industrial Silcar.</p>ara f├íbricas de empaquetado flexible.
+ 
+ ## Caracter├¡sticas
+ - **Trazabilidad Total**: Desde la orden de producci├│n hasta el despacho final.
+@@ -13,19 +13,13 @@ Sistema de gesti├│n de producci├│n industrial para f├íbricas de empaquetado flex
+ - PostgreSQL o SQL Server
+ - npm
+ 
+-## Configuraci├│n
+-
+-### Backend
+-1. Ir a la carpeta `backend`.
++##  console.log(`Silcar Backend running on port ${port}`);a `backend`.
+ 2. Ejecutar `npm install`.
+ 3. Configurar el archivo `.env` con la URL de su base de datos.
+ 4. Ejecutar las migraciones: `npx prisma migrate dev`.
+-5. Iniciar en desarrollo: `npm run dev`.
+-
+-### Frontend
+-1. Ir a la carpeta `frontend`.
++5. Iniciar en desarrollo:        <p style={{ color: 'var(--text-muted)' }}>M├®tricas clave de la planta Silcar.</p>tend`.
+ 2. Ejecutar `npm install`.
+ 3. Iniciar en desarrollo: `npm run dev`.
+ 
+ ## Autores
+-Desarrollado con foco en robustez industrial.
++Desarrollado          &copy; 2026 Renderbyte Silcar Industrial.
+diff --git a/backend/package-lock.json b/backend/package-lock.json
+index d2c93bc..60a39ac 100644
+--- a/backend/package-lock.json
++++ b/backend/package-lock.json
+@@ -7,6 +7,7 @@
+     "": {
+       "name": "backend",
+       "version": "1.0.0",
++      "hasInstallScript": true,
+       "license": "ISC",
+       "dependencies": {
+         "@prisma/client": "^6.19.3",
+diff --git a/backend/package.json b/backend/package.json
+index 23ac29a..1792eb2 100644
+--- a/backend/package.json
++++ b/backend/package.json
+@@ -6,6 +6,7 @@
+   "scripts": {
+     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+     "build": "tsc",
++    "postinstall": "prisma generate",
+     "start": "npx prisma db push && node dist/index.js",
+     "test": "echo \"Error: no test specified\" && exit 1"
+   },
+diff --git a/backend/prisma/schema.prisma b/backend/prisma/schema.prisma
+index 3d09575..5a8d491 100644
+--- a/backend/prisma/schema.prisma
++++ b/backend/prisma/schema.prisma
+@@ -26,7 +26,7 @@ model Product {
+   createdAt   DateTime          @default(now())
+   updatedAt   DateTime          @updatedAt
+   stock       CurrentStock?
+-  orders      ProductionOrder[]
++  orderItems  OrderProduct[]
+ }
+ 
+ model Supply {
+@@ -46,35 +46,58 @@ model ProductionOrder {
+   orderNumber    String              @unique
+   date           DateTime            @default(now())
+   clientId       Int
+-  productId      Int
+   sampleId       Int?
+-  plannedQty     Float
+-  producedQty    Float               @default(0)
+-  unit           String
+-  deliveryDate   DateTime?
++  
++  deliveryDate   DateTime
++  
+   priority       Int                 @default(1)
+-  status         String              @default("EN_PROCESO")
++  status         String              @default("├ôrdenes por realizar")
+   observations   String?
++  specifications String?
++  
+   creatorId      Int
+   machineId      Int?
+   operatorsText  String?
++  
++  approvedPrinting   Boolean @default(false)
++  approvedLamination Boolean @default(false)
++  approvedRefilado   Boolean @default(false)
++  
+   closedAt       DateTime?
+   createdAt      DateTime            @default(now())
+   updatedAt      DateTime            @updatedAt
++  
+   attachments    Attachment[]
+   colorOrders    ColorOrder[]
+   consumptions   Consumption[]
+   finalControl   FinalControl?
++  
+   user           User                @relation(fields: [creatorId], references: [id])
+   machine        Machine?            @relation("CreatedOnMachine", fields: [machineId], references: [id])
+   operators      OrderOperator[]
+   sample         Sample?             @relation(fields: [sampleId], references: [id])
+-  product        Product             @relation(fields: [productId], references: [id])
+   client         Client              @relation(fields: [clientId], references: [id])
++  
++  products       OrderProduct[]
++  
+   processes      ProductionProcess[]
+   result         ProductionResult?
+   stockMovements StockMovement[]
+   technicalSpec  TechnicalSpec?
++  
++  qualityPrinting   QualityControlPrinting[]
++  qualityLamination QualityControlLamination[]
++  qualityRefilado   QualityControlRefilado[]
++  checklists        ProcessChecklist[]
++}
++
++model OrderProduct {
++  id           Int             @id @default(autoincrement())
++  orderId      Int
++  productId    Int
++  plannedQty   String 
++  order        ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
++  product      Product         @relation(fields: [productId], references: [id])
+ }
+ 
+ model OrderOperator {
+@@ -110,14 +133,15 @@ model TechnicalSpec {
+ }
+ 
+ model ColorOrder {
+-  id           Int             @id @default(autoincrement())
+-  orderId      Int
+-  sequence     Int
+-  colorName    String
+-  supplyId     Int?
+-  formula      String?
+-  observations String?
+-  order        ProductionOrder @relation(fields: [orderId], references: [id])
++  id                Int             @id @default(autoincrement())
++  orderId           Int
++  sequence          Int
++  colorName         String
++  batchNumber       String? 
++  formula           String?
++  observations      String?
++  changesToConsider String?
++  order             ProductionOrder @relation(fields: [orderId], references: [id])
+ }
+ 
+ model Consumption {
+@@ -284,6 +308,8 @@ model CurrentStock {
+   productId    Int?     @unique
+   supplyId     Int?     @unique
+   stockActual  Float    @default(0)
++  minStock     Float    @default(10)
++  controlType  String   @default("unidad")
+   unit         String
+   lastUpdate   DateTime @default(now())
+   updateSource String?
+@@ -345,6 +371,7 @@ model Operator {
+   controls  FinalControl[]
+   processes ProductionProcess[]
+   orders    OrderOperator[]
++  checklists ProcessChecklist[]
+   user      User?
+ }
+ 
+@@ -389,3 +416,97 @@ model Attachment {
+   user         User            @relation(fields: [userId], references: [id])
+ }
+ 
++model ProcessChecklist {
++  id         Int             @id @default(autoincrement())
++  orderId    Int
++  stage      String          
++  date       DateTime        @default(now())
++  operatorId Int
++  
++  order      ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
++  operator   Operator        @relation(fields: [operatorId], references: [id])
++  items      ProcessChecklistItem[]
++}
++
++model ProcessChecklistItem {
++  id          Int              @id @default(autoincrement())
++  checklistId Int
++  time        String           
++  controlName String           
++  checked     Boolean          @default(false)
++  value       String?
++  checklist   ProcessChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
++}
++
++model QualityControlPrinting {
++  id          Int             @id @default(autoincrement())
++  orderId     Int
++  bags        Int?
++  pouch       Int?
++  quantity    String?
++  name        String?
++  
++  control     String?
++  controlName String?
++  signature   String?
++  text        String?
++  cut         String?
++  tone        String?
++  materialWidth String?
++  observation String?
++  product     String?
++  productName String?
++  
++  order       ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
++}
++
++model QualityControlLamination {
++  id          Int             @id @default(autoincrement())
++  orderId     Int
++  material    String?
++  adhesive    String?
++  reticulant  String?
++  diluent     String?
++  operators   String?
++  date        DateTime?
++  description String?
++  startTime   String?
++  endTime     String?
++  
++  nameCharge  String?
++  materialWidth String?
++  mat         String?
++  withoutNeedles Boolean?
++  scrapKg     Float?
++  quantity    String?
++  name        String?
++  
++  order       ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
++}
++
++model QualityControlRefilado {
++  id          Int             @id @default(autoincrement())
++  orderId     Int
++  exitSense   String?
++  tacaRight   String?
++  tacaLeft    String?
++  dePie       Boolean?
++  deCabeza    Boolean?
++  coilDiameter String?
++  meters      String?
++  espiraWidth String?
++  operator    String?
++  date        DateTime?
++  
++  description String?
++  startTime   String?
++  endTime     String?
++  
++  nameContact String?
++  side        String?
++  exitSenseFinal String?
++  coilCount   Int?
++  name        String?
++  
++  order       ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
++}
+diff --git a/backend/src/controllers/exportController.ts b/backend/src/controllers/exportController.ts
+index fe1e00c..2188cd1 100644
+--- a/backend/src/controllers/exportController.ts
++++ b/backend/src/controllers/exportController.ts
+@@ -13,7 +13,7 @@ const sendCSV = (res: Response, csv: string, filename: string) => {
+ export const exportClients = async (req: Request, res: Response) => {
+   try {
+     const csv = await exportService.exportClientsCSV();
+-    sendCSV(res, csv, 'clientes_belen.csv');
++    sendCSV(res, csv, 'clientes_silcar.csv');
+   } catch (error: any) {
+     res.status(500).json({ error: error.message });
+   }
+@@ -22,7 +22,7 @@ export const exportClients = async (req: Request, res: Response) => {
+ export const exportStock = async (req: Request, res: Response) => {
+   try {
+     const csv = await exportService.exportStockCSV();
+-    sendCSV(res, csv, 'stock_belen.csv');
++    sendCSV(res, csv, 'stock_silcar.csv');
+   } catch (error: any) {
+     res.status(500).json({ error: error.message });
+   }
+@@ -31,7 +31,7 @@ export const exportStock = async (req: Request, res: Response) => {
+ export const exportProducts = async (req: Request, res: Response) => {
+   try {
+     const csv = await exportService.exportProductsCSV();
+-    sendCSV(res, csv, 'productos_precios_belen.csv');
++    sendCSV(res, csv, 'productos_precios_silcar.csv');
+   } catch (error: any) {
+     res.status(500).json({ error: error.message });
+   }
+diff --git a/backend/src/controllers/orderController.ts b/backend/src/controllers/orderController.ts
+index e927d99..94e5314 100644
+--- a/backend/src/controllers/orderController.ts
++++ b/backend/src/controllers/orderController.ts
+@@ -84,7 +84,7 @@ export const exportOrdersCSV = async (req: Request, res: Response) => {
+     const content = Buffer.concat([bom, Buffer.from(csv, 'utf-8')]);
+     
+     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+-    res.setHeader('Content-Disposition', 'attachment; filename=ordenes_belen.csv');
++    res.setHeader('Content-Disposition', 'attachment; filename=ordenes_silcar.csv');
+     res.send(content);
+   } catch (error: any) {
+     res.status(500).json({ error: error.message });
+diff --git a/backend/src/index.ts b/backend/src/index.ts
+index 8035063..76bab5e 100644
+--- a/backend/src/index.ts
++++ b/backend/src/index.ts
+@@ -11,7 +11,6 @@ dotenv.config();
+ 
+ const app = express();
+ 
+-
+ const port = process.env.PORT || 3001;
+ 
+ app.use(cors());
+@@ -30,10 +29,31 @@ app.get('/api/machines', async (req, res) => res.json(await prisma.machine.findM
+ app.get('/api/operators', async (req, res) => res.json(await prisma.operator.findMany()));
+ app.get('/api/supplies', async (req, res) => res.json(await prisma.supply.findMany({ include: { stock: true } })));
+ 
+-
++// Stock Configuration Route
++app.put('/api/stock/config', async (req, res) => {
++  const { productId, supplyId, itemType, unit, minStock, controlType } = req.body;
++  try {
++    const updated = await prisma.currentStock.upsert({
++      where: productId ? { productId: parseInt(productId) } : { supplyId: parseInt(supplyId) },
++      update: { minStock: parseFloat(minStock), controlType },
++      create: {
++        productId: productId ? parseInt(productId) : null,
++        supplyId: supplyId ? parseInt(supplyId) : null,
++        itemType,
++        unit,
++        minStock: parseFloat(minStock),
++        controlType,
++        stockActual: 0
++      }
++    });
++    res.json(updated);
++  } catch(e: any) {
++    res.status(500).json({ error: e.message });
++  }
++});
+ 
+ app.listen(port, () => {
+-  console.log(`Belen Backend running on port ${port}`);
++  console.log(`Silcar Backend running on port ${port}`);
+ });
+ 
+ export { prisma };
+diff --git a/backend/src/services/orderService.ts b/backend/src/services/orderService.ts
+index c987a15..e1e3918 100644
+--- a/backend/src/services/orderService.ts
++++ b/backend/src/services/orderService.ts
+@@ -14,14 +14,15 @@ export const createOrder = async (orderData: any) => {
+   const { 
+     orderNumber, 
+     clientId, 
+-    productId, 
+-    plannedQty, 
+-    unit, 
++    deliveryDate,
++    products, 
+     creatorId,
+     machineId,
+     operatorIds,
+     technicalSpec,
+-    colorOrders
++    colorOrders,
++    specifications,
++    observations
+   } = orderData;
+ 
+   const finalCreatorId = creatorId ? parseInt(creatorId) : 1;
+@@ -32,17 +33,48 @@ export const createOrder = async (orderData: any) => {
+       data: {
+         orderNumber,
+         clientId: parseInt(clientId),
+-        productId: parseInt(productId),
+-        plannedQty: parseSafeFloat(plannedQty) || 0,
+-        unit,
++        deliveryDate: new Date(deliveryDate),
+         creatorId: finalCreatorId,
+         machineId: machineId ? parseInt(machineId) : null,
+         operatorsText: orderData.operatorsText,
+-        status: 'EN_PROCESO',
++        status: '├ôrdenes por realizar',
++        specifications,
++        observations
+       }
+     });
+ 
+-    // 2. Associate operators if provided
++    // 2. Create products
++    if (products && Array.isArray(products)) {
++      for (const prod of products) {
++        await tx.orderProduct.create({
++          data: {
++            orderId: order.id,
++            productId: parseInt(prod.productId),
++            plannedQty: prod.plannedQty
++          }
++        });
++
++        // Record stock movement (As 'RESERVA' or just audit)
++        // Since plannedQty is now String (e.g. "100 kg"), we can try to extract a number for the movement, or just skip it.
++        const qtyNum = parseSafeFloat(prod.plannedQty.replace(/[^0-9.]/g, '')) || 0;
++        if (qtyNum > 0) {
++           await tx.stockMovement.create({
++             data: {
++               type: 'EGRESO',
++               itemType: 'PRODUCTO',
++               productId: parseInt(prod.productId),
++               qty: qtyNum,
++               unit: prod.plannedQty.replace(/[0-9.]/g, '').trim() || 'UN',
++               sign: 0, 
++               orderId: order.id,
++               observations: `Reserva para orden ${orderNumber} - ${prod.plannedQty}`
++             }
++           });
++        }
++      }
++    }
++
++    // 3. Associate operators if provided
+     if (operatorIds && Array.isArray(operatorIds)) {
+       for (const opId of operatorIds) {
+         await tx.orderOperator.create({
+@@ -54,20 +86,6 @@ export const createOrder = async (orderData: any) => {
+       }
+     }
+ 
+-    // 3. Record stock movement (As 'RESERVA' or just audit)
+-    await tx.stockMovement.create({
+-      data: {
+-        type: 'EGRESO',
+-        itemType: 'PRODUCTO',
+-        productId: parseInt(productId),
+-        qty: parseSafeFloat(plannedQty) || 0,
+-        unit: unit || 'UN',
+-        sign: 0, 
+-        orderId: order.id,
+-        observations: `Reserva para orden ${orderNumber}`
+-      }
+-    });
+-
+     // 4. Create the technical specification linked to the order
+     if (technicalSpec) {
+       await tx.technicalSpec.create({
+@@ -99,7 +117,8 @@ export const createOrder = async (orderData: any) => {
+             sequence: parseSafeInt(color.sequence) || 0,
+             colorName: color.colorName,
+             formula: color.formula,
+-            supplyId: parseSafeInt(color.insumoId),
++            batchNumber: color.batchNumber,
++            changesToConsider: color.changesToConsider
+           }
+         });
+       }
+@@ -113,8 +132,6 @@ export const getAllOrders = async (machineId?: number) => {
+   const where: any = {};
+   
+   if (machineId) {
+-    // If filtered by machine, show orders created ON that machine 
+-    // OR orders that have a process on that machine
+     where.OR = [
+       { machineId },
+       { processes: { some: { machineId } } }
+@@ -125,7 +142,7 @@ export const getAllOrders = async (machineId?: number) => {
+     where,
+     include: {
+       client: true,
+-      product: true,
++      products: { include: { product: true } },
+       technicalSpec: true,
+       colorOrders: true,
+       machine: true,
+@@ -146,7 +163,7 @@ export const getOrderById = async (id: number) => {
+     where: { id },
+     include: {
+       client: true,
+-      product: true,
++      products: { include: { product: true } },
+       technicalSpec: true,
+       colorOrders: true,
+       machine: true,
+@@ -155,6 +172,15 @@ export const getOrderById = async (id: number) => {
+           operator: true
+         }
+       },
++      checklists: {
++        include: {
++          items: true,
++          operator: true
++        }
++      },
++      qualityPrinting: true,
++      qualityLamination: true,
++      qualityRefilado: true,
+       processes: {
+         include: {
+           machine: true,
+@@ -170,136 +196,10 @@ export const getOrderById = async (id: number) => {
+ };
+ 
+ export const createProcess = async (processData: any) => {
+-  const { 
+-    orderId, 
+-    type, 
+-    machineId, 
+-    operatorId, 
+-    startTime, 
+-    endTime, 
+-    scrapKg, 
+-    observations,
+-    specificData 
+-  } = processData;
+-
+-  return await prisma.$transaction(async (tx) => {
+-    const order = await tx.productionOrder.findUnique({
+-      where: { id: parseInt(orderId) }
+-    });
+-
+-    if (!order) {
+-      throw new Error(`Order with ID ${orderId} not found`);
+-    }
+-
+-    const process = await tx.productionProcess.create({
+-      data: {
+-        orderId: parseInt(orderId),
+-        type,
+-        status: endTime ? 'finalizado' : 'en_proceso',
+-        machineId: machineId ? parseInt(machineId) : null,
+-        operatorId: operatorId ? parseInt(operatorId) : null,
+-        startTime: startTime ? new Date(startTime) : new Date(),
+-        endTime: endTime ? new Date(endTime) : null,
+-        scrapKg: scrapKg ? parseFloat(scrapKg) : 0,
+-        observations,
+-      }
+-    });
+-
+-    // Save Material Lots if provided (Printing and Lamination)
+-    if (processData.materialLots && Array.isArray(processData.materialLots)) {
+-      for (const lot of processData.materialLots) {
+-        const initial = parseFloat(lot.initialMeters) || 0;
+-        const added = parseFloat(lot.addedMeters) || 0;
+-        const final = parseFloat(lot.finalMeters) || 0;
+-        const totalUsed = initial + added - final;
+-
+-        await tx.materialLot.create({
+-          data: {
+-            processId: process.id,
+-            lotNumber: lot.lotNumber,
+-            kg: parseFloat(lot.kg) || 0,
+-            initialMeters: initial,
+-            addedMeters: added,
+-            finalMeters: final,
+-            totalUsedMeters: totalUsed > 0 ? totalUsed : 0,
+-            observations: lot.observations
+-          }
+-        });
+-
+-        // Discount from stock if material is identifiable
+-        // Since we don't have a direct supplyId for the lot yet, 
+-        // we record a movement linked to the order's product or material.
+-        await tx.stockMovement.create({
+-          data: {
+-            type: 'EGRESO',
+-            itemType: 'MATERIAL',
+-            productId: order.productId,
+-            qty: totalUsed > 0 ? totalUsed : 0,
+-            unit: 'Metros',
+-            sign: -1,
+-            orderId: order.id,
+-            observations: `Consumo real lote ${lot.lotNumber} en etapa ${type}`
+-          }
+-        });
+-      }
+-    }
+-
+-    // Discount scrap from stock
+-    if (scrapKg && parseFloat(scrapKg) > 0 && order) {
+-      await tx.currentStock.updateMany({
+-        where: { productId: order.productId },
+-        data: {
+-          stockActual: { decrement: parseFloat(scrapKg) },
+-          lastUpdate: new Date()
+-        }
+-      });
+-
+-      await tx.stockMovement.create({
+-        data: {
+-          type: 'EGRESO',
+-          itemType: 'PRODUCTO',
+-          productId: order.productId,
+-          qty: parseFloat(scrapKg),
+-          unit: 'KG',
+-          sign: -1,
+-          orderId: order.id,
+-          observations: `Scrap detectado en etapa ${type}`
+-        }
+-      });
+-    }
+-
+-    if (type === 'IMPRESION' && specificData) {
+-      await tx.processPrinting.create({
+-        data: {
+-          processId: process.id,
+-          exitSense: specificData.exitSense,
+-          coilDiameter: specificData.coilDiameter ? parseFloat(specificData.coilDiameter) : null,
+-          processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
+-          coilCount: specificData.coilCount ? parseInt(specificData.coilCount) : null,
+-        }
+-      });
+-    } else if (type === 'LAMINACION' && specificData) {
+-      await tx.processLamination.create({
+-        data: {
+-          processId: process.id,
+-          mixProportion: specificData.mixProportion,
+-          processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
+-        }
+-      });
+-    } else if (type === 'REFILADO' && specificData) {
+-      await tx.processRefilado.create({
+-        data: {
+-          processId: process.id,
+-          exitSense: specificData.exitSense,
+-          coilDiameter: specificData.coilDiameter ? parseFloat(specificData.coilDiameter) : null,
+-          processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
+-          coilCount: specificData.coilCount ? parseInt(specificData.coilCount) : null,
+-        }
+-      });
+-    }
+-
+-    return process;
+-  });
++  // This is kept for backward compatibility with old forms if any, 
++  // though the user requested to remove "Control de producci├│n en planta".
++  // Let's just return what was there or leave it empty if unused.
++  throw new Error("Process creation logic disabled. Use checklists instead.");
+ };
+ 
+ export const getDashboardStats = async (machineId?: number) => {
+@@ -320,9 +220,9 @@ export const getDashboardStats = async (machineId?: number) => {
+     allProcesses,
+     recentOrders
+   ] = await Promise.all([
+-    prisma.productionOrder.count({ where: { ...whereOrder, status: 'EN_PROCESO' } }),
+-    prisma.productionOrder.count({ where: { ...whereOrder, status: 'FINALIZADA' } }),
+-    prisma.productionOrder.count({ where: { ...whereOrder, status: 'PENDIENTE_CONTROL' } }),
++    prisma.productionOrder.count({ where: { ...whereOrder, status: '├ôrdenes por realizar' } }),
++    prisma.productionOrder.count({ where: { ...whereOrder, status: 'Finalizadas' } }),
++    prisma.productionOrder.count({ where: { ...whereOrder, status: 'En proceso' } }),
+     prisma.stockMovement.count({ where: { exported: false } }),
+     prisma.currentStock.findMany(),
+     prisma.productionProcess.findMany({ 
+@@ -338,24 +238,21 @@ export const getDashboardStats = async (machineId?: number) => {
+       where: whereOrder,
+       take: 5,
+       orderBy: { createdAt: 'desc' },
+-      include: { client: true, product: true }
++      include: { client: true, products: { include: { product: true } } }
+     })
+   ]);
+ 
+   const availableStock = stockItems.reduce((acc, item) => acc + item.stockActual, 0);
+-  const lowStockAlerts = stockItems.filter(item => item.stockActual < 100).length;
++  const lowStockAlerts = stockItems.filter(item => item.stockActual < item.minStock).length;
+   
+   let totalProcessedMeters = 0;
+   let totalScrapKg = 0;
+ 
+   allProcesses.forEach(p => {
+     totalScrapKg += p.scrapKg || 0;
+-    
+-    // Sum from material lots if they exist (Printing/Lamination)
+     if (p.materialLots && p.materialLots.length > 0) {
+       totalProcessedMeters += p.materialLots.reduce((acc, lot) => acc + (lot.totalUsedMeters || 0), 0);
+     } else {
+-      // Fallback to specific stage data
+       if (p.type === 'IMPRESION') totalProcessedMeters += p.printingData?.processedMeters || 0;
+       else if (p.type === 'LAMINACION') totalProcessedMeters += p.laminationData?.processedMeters || 0;
+       else if (p.type === 'REFILADO') totalProcessedMeters += p.refiladoData?.processedMeters || 0;
+@@ -377,55 +274,53 @@ export const getDashboardStats = async (machineId?: number) => {
+   };
+ };
+ 
+-
+-
+ export const finalizeOrder = async (id: number) => {
+   return await prisma.$transaction(async (tx) => {
+     const order = await tx.productionOrder.findUnique({
+       where: { id },
+-      include: { processes: true }
++      include: { products: true }
+     });
+ 
+     if (!order) throw new Error("Orden no encontrada");
+ 
+-    // Update order status
+     const updatedOrder = await tx.productionOrder.update({
+       where: { id },
+-      data: { status: 'FINALIZADA' }
++      data: { status: 'Finalizadas' }
+     });
+ 
+-    // Calculate total produced (could be plannedQty or based on last stage)
+-    const qtyProduced = order.plannedQty;
+-
+-    // Increase product stock
+-    await tx.currentStock.upsert({
+-      where: { productId: order.productId },
+-      update: {
+-        stockActual: { increment: qtyProduced },
+-        lastUpdate: new Date()
+-      },
+-      create: {
+-        productId: order.productId,
+-        stockActual: qtyProduced,
+-        itemType: 'PRODUCTO',
+-        unit: order.unit,
+-        lastUpdate: new Date()
+-      }
+-    });
++    // Update stock for each product
++    for (const prod of order.products) {
++      const qtyProduced = parseSafeFloat(prod.plannedQty.replace(/[^0-9.]/g, '')) || 0;
++      if (qtyProduced > 0) {
++        await tx.currentStock.upsert({
++          where: { productId: prod.productId },
++          update: {
++            stockActual: { increment: qtyProduced },
++            lastUpdate: new Date()
++          },
++          create: {
++            productId: prod.productId,
++            stockActual: qtyProduced,
++            itemType: 'PRODUCTO',
++            unit: 'UN',
++            lastUpdate: new Date()
++          }
++        });
+ 
+-    // Record stock movement
+-    await tx.stockMovement.create({
+-      data: {
+-        type: 'INGRESO',
+-        itemType: 'PRODUCTO',
+-        productId: order.productId,
+-        qty: qtyProduced,
+-        unit: order.unit,
+-        sign: 1,
+-        orderId: order.id,
+-        observations: `Producci├│n finalizada de orden ${order.orderNumber}`
++        await tx.stockMovement.create({
++          data: {
++            type: 'INGRESO',
++            itemType: 'PRODUCTO',
++            productId: prod.productId,
++            qty: qtyProduced,
++            unit: 'UN',
++            sign: 1,
++            orderId: order.id,
++            observations: `Producci├│n finalizada de orden ${order.orderNumber}`
++          }
++        });
+       }
+-    });
++    }
+ 
+     return updatedOrder;
+   });
+@@ -441,20 +336,10 @@ export const exportOrdersCSV = async () => {
+   const orders = await prisma.productionOrder.findMany({
+     include: {
+       client: true,
+-      product: true,
++      products: { include: { product: true } },
+       technicalSpec: true,
+       colorOrders: { orderBy: { sequence: 'asc' } },
+       machine: true,
+-      processes: {
+-        include: {
+-          machine: true,
+-          operator: true,
+-          materialLots: true,
+-          printingData: true,
+-          laminationData: true,
+-          refiladoData: true
+-        }
+-      }
+     },
+     orderBy: { createdAt: 'desc' }
+   });
+@@ -462,15 +347,13 @@ export const exportOrdersCSV = async () => {
+   const header = [
+     'Orden N┬░',
+     'Fecha',
++    'Fecha Entrega',
+     'Estado',
+     'M├íquina Creaci├│n',
+     'Operadores de Turno',
+     'Cliente Cod.',
+     'Cliente Nombre',
+-    'Producto Cod.',
+-    'Producto Nombre',
+-    'Cant. Planificada',
+-    'Unidad',
++    'Productos',
+     'Medida Material',
+     'Corte',
+     'L├ímina / Material',
+@@ -479,52 +362,26 @@ export const exportOrdersCSV = async () => {
+     'Pie',
+     'Cant. Colores',
+     'Tipo Impresi├│n',
+-    'Clis├® Izq.',
+-    'Clis├® Centro',
+-    'Clis├® Der.',
+     'Secuencia de Colores',
+-    'F├│rmulas de Colores',
+-    'Etapa Impresi├│n - M├íquina',
+-    'Etapa Impresi├│n - Operario',
+-    'Etapa Impresi├│n - Metros',
+-    'Etapa Impresi├│n - Scrap (Kg)',
+-    'Etapa Impresi├│n - Lotes',
+-    'Etapa Laminaci├│n - M├íquina',
+-    'Etapa Laminaci├│n - Operario',
+-    'Etapa Laminaci├│n - Metros',
+-    'Etapa Laminaci├│n - Scrap (Kg)',
+-    'Etapa Laminaci├│n - Lotes',
+-    'Etapa Refilado - M├íquina',
+-    'Etapa Refilado - Operario',
+-    'Etapa Refilado - Metros',
+-    'Etapa Refilado - Scrap (Kg)'
++    'Lotes de Colores',
+   ].join(';');
+ 
+   const rows = orders.map(o => {
+-    const impresion = o.processes.find((p: any) => p.type === 'IMPRESION');
+-    const laminacion = o.processes.find((p: any) => p.type === 'LAMINACION');
+-    const refilado = o.processes.find((p: any) => p.type === 'REFILADO');
+-
+     const colorNames = o.colorOrders?.map((c: any) => `${c.sequence}┬░${c.colorName}`).join(', ') || '';
+-    const colorFormulas = o.colorOrders?.map((c: any) => `${c.sequence}┬░${c.formula || '-'}`).join(', ') || '';
+-
+-    const formatLots = (proc: any) => {
+-      if (!proc?.materialLots || proc.materialLots.length === 0) return '-';
+-      return proc.materialLots.map((l: any) => `Lote:${l.lotNumber} ${l.totalUsedMeters}m`).join(', ');
+-    };
++    const colorBatches = o.colorOrders?.map((c: any) => `${c.sequence}┬░${c.batchNumber || '-'}`).join(', ') || '';
++    
++    const productsText = o.products.map(p => `${p.product.name} (${p.plannedQty})`).join(' | ');
+ 
+     return [
+       o.orderNumber,
+       o.createdAt.toLocaleDateString(),
++      o.deliveryDate ? o.deliveryDate.toLocaleDateString() : '',
+       o.status,
+       o.machine?.name || 'Administraci├│n',
+       o.operatorsText || '',
+       o.client?.code || '',
+       o.client?.name || '',
+-      o.product?.code || '',
+-      o.product?.name || '',
+-      o.plannedQty,
+-      o.unit,
++      productsText,
+       o.technicalSpec?.materialMeasure || '',
+       o.technicalSpec?.cut || '',
+       o.technicalSpec?.lamina || '',
+@@ -533,25 +390,8 @@ export const exportOrdersCSV = async () => {
+       o.technicalSpec?.pie || '',
+       o.technicalSpec?.colorCount || '',
+       o.technicalSpec?.printingType || '',
+-      o.technicalSpec?.cliseLeft || '',
+-      o.technicalSpec?.cliseCenter || '',
+-      o.technicalSpec?.cliseRight || '',
+       colorNames,
+-      colorFormulas,
+-      impresion?.machine?.name || '-',
+-      impresion?.operator ? `${impresion.operator.firstName} ${impresion.operator.lastName}` : '-',
+-      impresion?.printingData?.processedMeters || '-',
+-      impresion?.scrapKg ?? '-',
+-      formatLots(impresion),
+-      laminacion?.machine?.name || '-',
+-      laminacion?.operator ? `${laminacion.operator.firstName} ${laminacion.operator.lastName}` : '-',
+-      laminacion?.laminationData?.processedMeters || '-',
+-      laminacion?.scrapKg ?? '-',
+-      formatLots(laminacion),
+-      refilado?.machine?.name || '-',
+-      refilado?.operator ? `${refilado.operator.firstName} ${refilado.operator.lastName}` : '-',
+-      refilado?.refiladoData?.processedMeters || '-',
+-      refilado?.scrapKg ?? '-'
++      colorBatches
+     ].map(val => `"${val}"`).join(';');
+   });
+ 
+@@ -560,24 +400,41 @@ export const exportOrdersCSV = async () => {
+ 
+ export const updateOrder = async (id: number, orderData: any) => {
+   const { 
+-    orderNumber, clientId, productId, plannedQty, unit, 
+-    machineId, operatorsText, technicalSpec, colorOrders
++    orderNumber, clientId, deliveryDate, products, 
++    machineId, operatorsText, technicalSpec, colorOrders, specifications, observations, status
+   } = orderData;
+ 
+   return await prisma.$transaction(async (tx) => {
++    const updateData: any = {
++      orderNumber,
++      clientId: parseInt(clientId),
++      machineId: machineId ? parseInt(machineId) : null,
++      operatorsText,
++      specifications,
++      observations
++    };
++    
++    if (deliveryDate) updateData.deliveryDate = new Date(deliveryDate);
++    if (status) updateData.status = status;
++
+     const order = await tx.productionOrder.update({
+       where: { id },
+-      data: {
+-        orderNumber,
+-        clientId: parseInt(clientId),
+-        productId: parseInt(productId),
+-        plannedQty: parseSafeFloat(plannedQty) || 0,
+-        unit,
+-        machineId: machineId ? parseInt(machineId) : null,
+-        operatorsText,
+-      }
++      data: updateData
+     });
+ 
++    if (products && Array.isArray(products)) {
++      await tx.orderProduct.deleteMany({ where: { orderId: id } });
++      for (const prod of products) {
++        await tx.orderProduct.create({
++          data: {
++            orderId: id,
++            productId: parseInt(prod.productId),
++            plannedQty: prod.plannedQty
++          }
++        });
++      }
++    }
++
+     if (technicalSpec) {
+       await tx.technicalSpec.upsert({
+         where: { orderId: id },
+@@ -624,7 +481,8 @@ export const updateOrder = async (id: number, orderData: any) => {
+             sequence: parseSafeInt(color.sequence) || 0,
+             colorName: color.colorName,
+             formula: color.formula,
+-            supplyId: parseSafeInt(color.insumoId),
++            batchNumber: color.batchNumber,
++            changesToConsider: color.changesToConsider
+           }
+         });
+       }
+diff --git a/frontend/src/App.tsx b/frontend/src/App.tsx
+index f28fbe3..581fba8 100644
+--- a/frontend/src/App.tsx
++++ b/frontend/src/App.tsx
+@@ -17,9 +17,9 @@ import './index.css';
+ // Placeholder components for other routes
+ const Placeholder = ({ title }: { title: string }) => (
+   <div>
+-    <h1 style={{ fontSize: '1.875rem', fontWeight: 700, marginBottom: '1rem' }}>{title}</h1>
++    <h2 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Planta Industrial - Silcar - {title}</h2>
+     <div className="card">
+-      <p>Esta secci├│n est├í en desarrollo para el sistema industrial Bel├®n.</p>
++      <p style={{ color: 'var(--text-muted)' }}>Esta secci├│n est├í en desarrollo.</p>
+     </div>
+   </div>
+ );
+diff --git a/frontend/src/components/Sidebar.tsx b/frontend/src/components/Sidebar.tsx
+index bb557d2..e0b814e 100644
+--- a/frontend/src/components/Sidebar.tsx
++++ b/frontend/src/components/Sidebar.tsx
+@@ -36,8 +36,8 @@ export const Sidebar: React.FC = () => {
+   return (
+     <aside className={styles.sidebar}>
+       <div className={styles.logo}>
+-        <h1>BELEN</h1>
+-        <span>Industrial OS</span>
++        <h1 style={{ fontSize: '1.2rem' }}>Planta Industria Silcar</h1>
++        <span style={{ fontSize: '0.8rem' }}>Silcar Industria OS</span>
+       </div>
+       <nav className={styles.nav}>
+         {filteredItems.map((item, index) => {
+diff --git a/frontend/src/hooks/useAuth.tsx b/frontend/src/hooks/useAuth.tsx
+index bc293c1..b96c51c 100644
+--- a/frontend/src/hooks/useAuth.tsx
++++ b/frontend/src/hooks/useAuth.tsx
+@@ -27,7 +27,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
+   const [loading, setLoading] = useState(true);
+ 
+   useEffect(() => {
+-    const savedUser = localStorage.getItem('belen_user');
++    const savedUser = localStorage.getItem('silcar_user');
+     if (savedUser) {
+       setUser(JSON.parse(savedUser));
+     }
+@@ -36,12 +36,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
+ 
+   const login = (userData: User) => {
+     setUser(userData);
+-    localStorage.setItem('belen_user', JSON.stringify(userData));
++    localStorage.setItem('silcar_user', JSON.stringify(userData));
+   };
+ 
+   const logout = () => {
+     setUser(null);
+-    localStorage.removeItem('belen_user');
++    localStorage.removeItem('silcar_user');
+   };
+ 
+   return (
+diff --git a/frontend/src/pages/Dashboard.tsx b/frontend/src/pages/Dashboard.tsx
+index 608a7d1..47d21d2 100644
+--- a/frontend/src/pages/Dashboard.tsx
++++ b/frontend/src/pages/Dashboard.tsx
+@@ -106,10 +106,23 @@ export const Dashboard: React.FC = () => {
+                 <tr key={order.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                   <td style={{ padding: '1rem 0', fontWeight: 700 }}>{order.orderNumber}</td>
+                   <td style={{ color: 'var(--text-muted)' }}>{order.client?.name}</td>
+-                  <td>{order.product?.name}</td>
++                  <td>{order.products?.map((p: any) => p.product?.name).join(', ') || '-'}</td>
+                   <td>
+-                    <span className={`status-badge status-${order.status.toLowerCase()}`}>
+-                      {order.status.replace('_', ' ')}
++                    <span className={`status-badge`} style={{
++                      backgroundColor: order.status === '├ôrdenes por realizar' ? 'rgba(234,179,8,0.1)' :
++                                       order.status === 'En proceso' ? 'rgba(59,130,246,0.1)' :
++                                       order.status === 'Finalizadas' ? 'rgba(168,85,247,0.1)' :
++                                       'rgba(34,197,94,0.1)',
++                      color: order.status === '├ôrdenes por realizar' ? '#eab308' :
++                             order.status === 'En proceso' ? '#3b82f6' :
++                             order.status === 'Finalizadas' ? '#a855f7' :
++                             '#22c55e',
++                      padding: '0.25rem 0.75rem',
++                      borderRadius: '9999px',
++                      fontSize: '0.75rem',
++                      fontWeight: 700
++                    }}>
++                      {order.status}
+                     </span>
+                   </td>
+                 </tr>
+diff --git a/frontend/src/pages/ImportCSV.tsx b/frontend/src/pages/ImportCSV.tsx
+index 1b7b73f..b523147 100644
+--- a/frontend/src/pages/ImportCSV.tsx
++++ b/frontend/src/pages/ImportCSV.tsx
+@@ -41,7 +41,7 @@ export const ImportCSV: React.FC = () => {
+   const handleExport = async (type: string) => {
+     try {
+       const endpoint = type === 'STOCK' ? 'stock' : type === 'PRECIOS' ? 'products' : 'clients';
+-      const filename = type === 'STOCK' ? 'stock_belen.csv' : type === 'PRECIOS' ? 'productos_precios_belen.csv' : 'clientes_belen.csv';
++      const filename = type === 'STOCK' ? 'stock_silcar.csv' : type === 'PRECIOS' ? 'productos_precios_silcar.csv' : 'clientes_silcar.csv';
+       
+       const res = await api.get(`/export/${endpoint}`, { responseType: 'blob' });
+       const url = window.URL.createObjectURL(new Blob([res.data]));
+@@ -107,16 +107,6 @@ export const ImportCSV: React.FC = () => {
+               icon={<Package />} 
+               onClick={() => handleExport('STOCK')}
+             />
+-            <ExportCard 
+-              title="Exportar Precios" 
+-              icon={<DollarSign />} 
+-              onClick={() => handleExport('PRECIOS')}
+-            />
+-            <ExportCard 
+-              title="Exportar Clientes" 
+-              icon={<Users />} 
+-              onClick={() => handleExport('CLIENTES')}
+-            />
+           </div>
+ 
+           {result && (
+diff --git a/frontend/src/pages/LoginPage.tsx b/frontend/src/pages/LoginPage.tsx
+index 05b7c8b..993c7d7 100644
+--- a/frontend/src/pages/LoginPage.tsx
++++ b/frontend/src/pages/LoginPage.tsx
+@@ -53,8 +53,8 @@ export const LoginPage: React.FC = () => {
+           }}>
+             <Factory size={32} color="white" />
+           </div>
+-          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.5rem' }}>BEL├ëN</h1>
+-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Industrial Operation System</p>
++          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.5rem' }}>Planta Industria Silcar</h1>
++          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Silcar Industria OS</p>
+         </div>
+ 
+         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+@@ -117,7 +117,7 @@ export const LoginPage: React.FC = () => {
+         </form>
+ 
+         <div style={{ marginTop: '2rem', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+-          &copy; 2026 Renderbyte Bel├®n Industrial
++          &copy; 2026 Admin Silcar
+         </div>
+       </div>
+     </div>
+diff --git a/frontend/src/pages/OrderDetail.tsx b/frontend/src/pages/OrderDetail.tsx
+index 298ff96..c975159 100644
+--- a/frontend/src/pages/OrderDetail.tsx
++++ b/frontend/src/pages/OrderDetail.tsx
+@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
+ import { useParams, Link } from 'react-router-dom';
+ import api from '../services/api';
+ import { useAuth } from '../hooks/useAuth';
+-import { ClipboardList as Clipboard, Ruler, Layers, ArrowLeft, Play, FileText, Cpu, Users, Edit } from 'lucide-react';
++import { ClipboardList as Clipboard, Ruler, Layers, ArrowLeft, Play, FileText, Cpu, Users, Edit, CheckSquare, ShieldCheck } from 'lucide-react';
+ import { FormSection } from '../components/FormSection';
+ 
+ export const OrderDetail: React.FC = () => {
+@@ -10,6 +10,7 @@ export const OrderDetail: React.FC = () => {
+   const [order, setOrder] = useState<any>(null);
+   const [loading, setLoading] = useState(true);
+   const { user } = useAuth();
++  const [activeTab, setActiveTab] = useState('INFO');
+ 
+   useEffect(() => {
+     const fetchData = async () => {
+@@ -35,132 +36,233 @@ export const OrderDetail: React.FC = () => {
+           <Link to="/ordenes" style={{ color: 'var(--text-muted)' }}><ArrowLeft size={24} /></Link>
+           <div>
+             <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Orden #{order.orderNumber}</h1>
+-            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+-              <span className={`status-badge status-${order.status.toLowerCase()}`}>{order.status.replace('_', ' ')}</span>
++            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', alignItems: 'center' }}>
++              <span className={`status-badge`} style={{
++                  backgroundColor: order.status === '├ôrdenes por realizar' ? 'rgba(234,179,8,0.1)' :
++                                   order.status === 'En proceso' ? 'rgba(59,130,246,0.1)' :
++                                   order.status === 'Finalizadas' ? 'rgba(168,85,247,0.1)' :
++                                   'rgba(34,197,94,0.1)',
++                  color: order.status === '├ôrdenes por realizar' ? '#eab308' :
++                         order.status === 'En proceso' ? '#3b82f6' :
++                         order.status === 'Finalizadas' ? '#a855f7' :
++                         '#22c55e',
++              }}>{order.status}</span>
+               <span style={{ color: 'var(--text-muted)' }}>Cliente: <b>{order.client?.name}</b></span>
++              <span style={{ color: 'var(--text-muted)' }}>Entrega: <b>{order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : '-'}</b></span>
+             </div>
+           </div>
+         </div>
+-        <Link 
+-          to={`/ordenes/editar/${order.id}`} 
+-          className="btn btn-primary" 
+-          style={{ 
+-            display: 'flex', alignItems: 'center', gap: '0.75rem', 
+-            padding: '1rem 2rem', fontSize: '1rem', fontWeight: 700,
+-            textDecoration: 'none',
+-            boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)'
+-          }}
+-        >
+-          <Edit size={20} /> EDITAR ORDEN
+-        </Link>
++        <div style={{ display: 'flex', gap: '1rem' }}>
++            <Link 
++            to={`/ordenes/editar/${order.id}`} 
++            className="btn" 
++            style={{ 
++                display: 'flex', alignItems: 'center', gap: '0.5rem', 
++                padding: '0.75rem 1.5rem', fontSize: '0.875rem', fontWeight: 700,
++                border: '1px solid var(--border)', color: 'var(--text-main)', background: 'transparent',
++                textDecoration: 'none'
++            }}
++            >
++            <Edit size={18} /> EDITAR
++            </Link>
++        </div>
++      </div>
++
++      <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid var(--border)' }}>
++          <button className={`tab-btn ${activeTab === 'INFO' ? 'active' : ''}`} onClick={() => setActiveTab('INFO')}>
++              <FileText size={18} /> Resumen General
++          </button>
++          <button className={`tab-btn ${activeTab === 'CHECKLIST' ? 'active' : ''}`} onClick={() => setActiveTab('CHECKLIST')}>
++              <CheckSquare size={18} /> Checklist de Proceso
++          </button>
++          <button className={`tab-btn ${activeTab === 'QUALITY' ? 'active' : ''}`} onClick={() => setActiveTab('QUALITY')}>
++              <ShieldCheck size={18} /> Control de Calidad
++          </button>
+       </div>
+ 
+-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem' }}>
+-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+-          <FormSection title="Origen de la Orden" icon={<Cpu size={24} />}>
+-            <DataField label="M├íquina de Creaci├│n" value={order.machine ? `${order.machine.name} (${order.machine.code})` : 'Administraci├│n'} />
+-            <div style={{ gridColumn: 'span 2' }}>
+-              <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Operadores de Turno (Creaci├│n)</p>
+-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+-                {order.operatorsText ? (
+-                  <span className="status-badge" style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', border: '1px solid var(--border)' }}>
+-                    {order.operatorsText}
+-                  </span>
+-                ) : (
+-                  order.operators?.map((op: any) => (
+-                    <span key={op.id} className="status-badge" style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', border: '1px solid var(--border)' }}>
+-                      {op.operator.firstName} {op.operator.lastName}
++      {activeTab === 'INFO' && (
++        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem' }}>
++            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
++            <FormSection title="Asignaci├│n y Responsables" icon={<Cpu size={24} />}>
++                <DataField label="M├íquina Asignada" value={order.machine ? `${order.machine.name} (${order.machine.code})` : 'Sin asignar'} />
++                <div style={{ gridColumn: 'span 2' }}>
++                <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Operadores Asignados</p>
++                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
++                    {order.operatorsText ? (
++                    <span className="status-badge" style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', border: '1px solid var(--border)' }}>
++                        {order.operatorsText}
+                     </span>
+-                  ))
+-                )}
+-                {!order.operatorsText && (!order.operators || order.operators.length === 0) && <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No registrados</span>}
+-              </div>
++                    ) : (
++                    order.operators?.map((op: any) => (
++                        <span key={op.id} className="status-badge" style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', border: '1px solid var(--border)' }}>
++                        {op.operator.firstName} {op.operator.lastName}
++                        </span>
++                    ))
++                    )}
++                    {!order.operatorsText && (!order.operators || order.operators.length === 0) && <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No asignados</span>}
++                </div>
++                </div>
++            </FormSection>
++
++            {order.specifications && (
++                <FormSection title="Especificaciones / Observaciones" icon={<FileText size={24} />}>
++                    <div style={{ gridColumn: 'span 2' }}>
++                        <p style={{ fontSize: '0.875rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{order.specifications}</p>
++                    </div>
++                </FormSection>
++            )}
++
++            <FormSection title="Especificaci├│n T├®cnica" icon={<Ruler size={24} />}>
++                <DataField label="Medida Material" value={order?.technicalSpec?.materialMeasure} />
++                <DataField label="Corte" value={order?.technicalSpec?.cut} />
++                <DataField label="L├ímina / Material" value={order?.technicalSpec?.lamina} />
++                <DataField label="Metros Previstos" value={order?.technicalSpec?.meters ? order.technicalSpec.meters + ' m' : '-'} />
++                <DataField label="Tubo" value={order?.technicalSpec?.tube} />
++                <DataField label="Tipo Impresi├│n" value={order?.technicalSpec?.printingType} />
++                <DataField label="Pie" value={order?.technicalSpec?.pie} />
++                <DataField label="Clis├® Centro" value={order?.technicalSpec?.cliseCenter} />
++            </FormSection>
++            </div>
++
++            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
++            <div className="card">
++                <h4 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
++                    <Package size={18} color="var(--primary)" /> 
++                    Productos Planificados
++                </h4>
++                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
++                    {order.products?.map((prod: any, idx: number) => (
++                        <div key={idx} style={{ padding: '0.75rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '8px', borderLeft: '3px solid var(--primary)' }}>
++                            <p style={{ fontSize: '0.875rem', fontWeight: 800, margin: '0 0 0.25rem 0' }}>{prod.product.name}</p>
++                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>Cantidad planificada: <b style={{ color: 'var(--text-main)' }}>{prod.plannedQty}</b></p>
++                        </div>
++                    ))}
++                    {(!order.products || order.products.length === 0) && <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Sin productos registrados.</p>}
++                </div>
++            </div>
++
++            <FormSection title="Secuencia de Colores" icon={<Layers size={24} />}>
++                <div style={{ gridColumn: 'span 2' }}>
++                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
++                        <thead>
++                            <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
++                                <th style={{ padding: '0.5rem' }}>#</th>
++                                <th>Color</th>
++                                <th>F├│rmula</th>
++                                <th>Lote</th>
++                                <th>Cambios a tener en cuenta</th>
++                            </tr>
++                        </thead>
++                        <tbody>
++                            {order.colorOrders?.map((color: any) => (
++                                <tr key={color.id} style={{ borderBottom: '1px solid var(--border)' }}>
++                                    <td style={{ padding: '0.6rem 0.5rem', fontWeight: 800, color: 'var(--primary)' }}>{color.sequence}┬░</td>
++                                    <td>{color.colorName}</td>
++                                    <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{color.formula || '-'}</td>
++                                    <td><span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.1)', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>{color.batchNumber || '-'}</span></td>
++                                    <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{color.changesToConsider || '-'}</td>
++                                </tr>
++                            ))}
++                        </tbody>
++                    </table>
++                </div>
++            </FormSection>
+             </div>
+-          </FormSection>
+-
+-          <FormSection title="Especificaci├│n T├®cnica" icon={<Ruler size={24} />}>
+-            <DataField label="Medida Material" value={order?.technicalSpec?.materialMeasure} />
+-            <DataField label="Corte" value={order?.technicalSpec?.cut} />
+-            <DataField label="L├ímina / Material" value={order?.technicalSpec?.lamina} />
+-            <DataField label="Metros Previstos" value={order?.technicalSpec?.meters ? order.technicalSpec.meters + ' m' : '-'} />
+-            <DataField label="Tubo" value={order?.technicalSpec?.tube} />
+-            <DataField label="Tipo Impresi├│n" value={order?.technicalSpec?.printingType} />
+-            <DataField label="Pie" value={order?.technicalSpec?.pie} />
+-            <DataField label="Clis├® Centro" value={order?.technicalSpec?.cliseCenter} />
+-          </FormSection>
+         </div>
++      )}
+ 
+-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
++      {activeTab === 'CHECKLIST' && (
+           <div className="card">
+-            <h4 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+-                <FileText size={18} color="var(--primary)" /> 
+-                Resumen de Lote
+-            </h4>
+-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+-                <p style={{ fontSize: '0.875rem' }}>Producto: <b>{order.product?.name}</b></p>
+-                <p style={{ fontSize: '0.875rem' }}>Objetivo: <b>{order.plannedQty.toLocaleString()} {order.unit}</b></p>
+-                <p style={{ fontSize: '0.875rem' }}>Fecha Alta: <b>{new Date(order.createdAt).toLocaleDateString()}</b></p>
+-            </div>
++              <h3 style={{ marginBottom: '1rem' }}>Checklist de Proceso</h3>
++              <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Seleccione la etapa para registrar los controles horarios (07hs a 20hs).</p>
++              
++              {/* This is a placeholder for the actual interactive form which would map the ProcessChecklistItem table */}
++              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
++                  <ChecklistTable title="Impresoras" controls={['Registro', 'Tonos de tinta', 'Distancia de boca', 'Tratado de material', 'Viscosidad', 'Presi├│n', 'Temperatura', 'Palabras e im├ígenes', 'Cantidad de tinta']} />
++                  <ChecklistTable title="Laminadora" controls={['Tensi├│n de rebobinadora', 'Tensi├│n de desbandadora', 'Temperatura de t├║nel', 'Temperatura de calandra', 'Viscosidad de adhesivo', 'Carga de adhesivo', 'Secado de adhesivo']} />
++                  <ChecklistTable title="Refiladora" controls={['Presi├│n', 'Meter l├ímina', 'Distancia de boca', 'Imagen impresa igual', 'Sensor']} />
++              </div>
+           </div>
++      )}
+ 
+-          <FormSection title="Secuencia de Colores" icon={<Layers size={24} />}>
+-             <div style={{ gridColumn: 'span 2' }}>
+-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
++      {activeTab === 'QUALITY' && (
++          <div className="card">
++              <h3 style={{ marginBottom: '1rem' }}>Control de Calidad</h3>
++              <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Verificaci├│n final de cada etapa productiva.</p>
++              
++              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
++                  <div style={{ padding: '1.5rem', border: '1px solid var(--border)', borderRadius: '12px' }}>
++                      <h4 style={{ color: 'var(--primary)', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between' }}>
++                          <span>Verificaci├│n del trabajo final - Impresi├│n</span>
++                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: 'var(--text-main)', cursor: 'pointer' }}>
++                              <input type="checkbox" checked={order.approvedPrinting} readOnly /> Aprobado de impresi├│n
++                          </label>
++                      </h4>
++                      <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Controles: Corte, Tono, Ancho de material, Observaci├│n del producto.</p>
++                      <button className="btn" style={{ marginTop: '1rem', border: '1px solid var(--primary)', color: 'var(--primary)' }}>Cargar Control</button>
++                  </div>
++
++                  <div style={{ padding: '1.5rem', border: '1px solid var(--border)', borderRadius: '12px' }}>
++                      <h4 style={{ color: 'var(--primary)', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between' }}>
++                          <span>Control de Calidad - Laminaci├│n</span>
++                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: 'var(--text-main)', cursor: 'pointer' }}>
++                              <input type="checkbox" checked={order.approvedLamination} readOnly /> Aprobado de laminaci├│n
++                          </label>
++                      </h4>
++                      <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Controles: Adhesivo, Reticulante, Diluyente, Tensi├│n, Viscosidad, Temperatura.</p>
++                      <button className="btn" style={{ marginTop: '1rem', border: '1px solid var(--primary)', color: 'var(--primary)' }}>Cargar Control</button>
++                  </div>
++
++                  <div style={{ padding: '1.5rem', border: '1px solid var(--border)', borderRadius: '12px' }}>
++                      <h4 style={{ color: 'var(--primary)', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between' }}>
++                          <span>Control de Calidad - Refilaci├│n</span>
++                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: 'var(--text-main)', cursor: 'pointer' }}>
++                              <input type="checkbox" checked={order.approvedRefilado} readOnly /> Aprobado de refilaci├│n
++                          </label>
++                      </h4>
++                      <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Controles: Sentido salida cliente, Taca derecha/izquierda, De pie, De cabeza, Di├ímetro.</p>
++                      <button className="btn" style={{ marginTop: '1rem', border: '1px solid var(--primary)', color: 'var(--primary)' }}>Cargar Control</button>
++                  </div>
++              </div>
++          </div>
++      )}
++    </div>
++  );
++};
++
++const ChecklistTable = ({ title, controls }: { title: string, controls: string[] }) => {
++    const hours = ['07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20'];
++    
++    return (
++        <div>
++            <h4 style={{ color: 'var(--primary)', marginBottom: '1rem' }}>{title}</h4>
++            <div style={{ overflowX: 'auto' }}>
++                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+                     <thead>
+-                        <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+-                            <th style={{ padding: '0.5rem' }}>#</th>
+-                            <th>Color</th>
+-                            <th>F├│rmula</th>
++                        <tr style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)' }}>
++                            <th style={{ padding: '0.5rem', textAlign: 'left', minWidth: '150px' }}>Control</th>
++                            {hours.map(h => <th key={h} style={{ padding: '0.5rem', textAlign: 'center' }}>{h}h</th>)}
+                         </tr>
+                     </thead>
+                     <tbody>
+-                        {order.colorOrders?.map((color: any) => (
+-                            <tr key={color.id} style={{ borderBottom: '1px solid var(--border)' }}>
+-                                <td style={{ padding: '0.6rem 0.5rem', fontWeight: 800, color: 'var(--primary)' }}>{color.sequence}┬░</td>
+-                                <td>{color.colorName}</td>
+-                                <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{color.formula || '-'}</td>
++                        {controls.map((ctrl, i) => (
++                            <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
++                                <td style={{ padding: '0.5rem', fontWeight: 600 }}>{ctrl}</td>
++                                {hours.map(h => (
++                                    <td key={h} style={{ padding: '0.5rem', textAlign: 'center' }}>
++                                        <input type="checkbox" style={{ cursor: 'pointer' }} />
++                                    </td>
++                                ))}
+                             </tr>
+                         ))}
+                     </tbody>
+                 </table>
+-             </div>
+-          </FormSection>
+-
+-          {order.processes && order.processes.length > 0 && (
+-            <div className="card">
+-              <h4 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+-                  <Clipboard size={18} color="var(--primary)" /> 
+-                  Actividad de Producci├│n
+-              </h4>
+-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+-                {order.processes?.map((p: any) => (
+-                  <div key={p.id} style={{ padding: '0.75rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '8px', fontSize: '0.875rem' }}>
+-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+-                      <span>{p.type}</span>
+-                      <span style={{ color: 'var(--primary)' }}>{p.scrapKg} kg scrap</span>
+-                    </div>
+-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.25rem 0' }}>Maq: {p.machine?.name} - Op: {p.operator?.firstName}</p>
+-                    
+-                    {p.materialLots && p.materialLots.length > 0 && (
+-                      <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+-                        <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.25rem' }}>Lotes de Material:</p>
+-                        {p.materialLots.map((l: any) => (
+-                          <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
+-                            <span>Lote: {l.lotNumber}</span>
+-                            <span>{l.totalUsedMeters} m</span>
+-                          </div>
+-                        ))}
+-                      </div>
+-                    )}
+-                  </div>
+-                ))}
+-              </div>
+             </div>
+-          )}
++            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
++                <button className="btn" style={{ border: '1px solid var(--border)', fontSize: '0.75rem' }}>Guardar Checklist {title}</button>
++            </div>
+         </div>
+-      </div>
+-    </div>
+-  );
++    );
+ };
+ 
+ const DataField = ({ label, value }: { label: string, value: string }) => (
+diff --git a/frontend/src/pages/OrderForm.tsx b/frontend/src/pages/OrderForm.tsx
+index 1d4e017..8117361 100644
+--- a/frontend/src/pages/OrderForm.tsx
++++ b/frontend/src/pages/OrderForm.tsx
+@@ -1,59 +1,35 @@
+ import React, { useState, useEffect } from 'react';
+-import { useParams } from 'react-router-dom';
+-import { Save, Package, Ruler, ClipboardList, Layers, Plus, Trash2, Users, Cpu, Play, Droplets, Scissors } from 'lucide-react';
++import { useParams, useNavigate } from 'react-router-dom';
++import { Save, Package, Ruler, Layers, Plus, Trash2, Users, Calendar, AlignLeft } from 'lucide-react';
+ import api from '../services/api';
+ import { FormSection } from '../components/FormSection';
+ import { useAuth } from '../hooks/useAuth';
+ 
+-const StageTab = ({ active, onClick, icon, title, step, disabled }: any) => (
+-  <button 
+-      type="button"
+-      onClick={onClick}
+-      disabled={disabled}
+-      className="btn" 
+-      style={{ 
+-          flex: 1, padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem',
+-          backgroundColor: active ? 'var(--primary)' : 'rgba(255,255,255,0.02)',
+-          color: active ? 'white' : 'var(--text-muted)',
+-          border: active ? 'none' : '1px solid var(--border)',
+-          transition: 'all 0.2s ease',
+-          opacity: disabled ? 0.3 : 1,
+-          cursor: disabled ? 'not-allowed' : 'pointer'
+-      }}
+-  >
+-      {React.cloneElement(icon, { size: 20 })}
+-      <div style={{ textAlign: 'left' }}>
+-          <p style={{ fontSize: '0.55rem', fontWeight: 800, opacity: 0.7, margin: 0 }}>PASO {step}</p>
+-          <p style={{ fontSize: '0.875rem', fontWeight: 800, margin: 0 }}>{title}</p>
+-      </div>
+-  </button>
+-);
+-
+ export const OrderForm: React.FC = () => {
+   const { id } = useParams<{ id: string }>();
++  const navigate = useNavigate();
+   const isEditing = !!id;
+   const { user } = useAuth();
+   
+   const [loading, setLoading] = useState(false);
+   const [clients, setClients] = useState<any[]>([]);
+-  const [products, setProducts] = useState<any[]>([]);
+-  const [supplies, setSupplies] = useState<any[]>([]);
++  const [productsList, setProductsList] = useState<any[]>([]);
+   const [operators, setOperators] = useState<any[]>([]);
+   const [machines, setMachines] = useState<any[]>([]);
+   const [success, setSuccess] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+ 
+-  // Form State
+   const [formData, setFormData] = useState({
+     orderNumber: '',
+     clientId: '',
+-    productId: '',
+-    plannedQty: '',
+-    unit: 'Metros',
++    deliveryDate: '',
++    products: [{ productId: '', plannedQty: '' }],
+     creatorId: user?.id?.toString() || '1', 
+     machineId: user?.machine?.id?.toString() || '',
+     operatorIds: [] as string[],
+     operatorsText: '',
++    specifications: '',
++    observations: '',
+     technicalSpec: {
+       materialMeasure: '',
+       cut: '',
+@@ -70,38 +46,21 @@ export const OrderForm: React.FC = () => {
+       cliseRight: '',
+     },
+     colorOrders: [
+-      { sequence: 1, colorName: '', formula: '', insumoId: '' }
+-    ],
+-    observations: ''
+-  });
+-
+-  // Production Stage State
+-  const [activeStage, setActiveStage] = useState<'IMPRESION' | 'LAMINACION' | 'REFILADO'>('IMPRESION');
+-  const [stageData, setStageData] = useState({
+-      machineId: user?.machine?.id?.toString() || "",
+-      operatorId: "",
+-      exitSense: "Sentido A",
+-      processedMeters: "",
+-      scrapKg: "",
+-      observations: ""
++      { sequence: 1, colorName: '', formula: '', batchNumber: '', changesToConsider: '' }
++    ]
+   });
+-  const [materialLots, setMaterialLots] = useState<any[]>([
+-    { lotNumber: '', kg: '', initialMeters: '', addedMeters: '0', finalMeters: '0', totalUsed: 0, observations: '' }
+-  ]);
+ 
+   useEffect(() => {
+     const fetchData = async () => {
+       try {
+-        const [clientsRes, productsRes, suppliesRes, operatorsRes, machinesRes] = await Promise.all([
++        const [clientsRes, productsRes, operatorsRes, machinesRes] = await Promise.all([
+           api.get(`/clients`),
+           api.get(`/products`),
+-          api.get(`/supplies`),
+           api.get(`/operators`),
+           api.get(`/machines`)
+         ]);
+         setClients(clientsRes.data);
+-        setProducts(productsRes.data);
+-        setSupplies(suppliesRes.data);
++        setProductsList(productsRes.data);
+         setOperators(operatorsRes.data);
+         setMachines(machinesRes.data);
+ 
+@@ -112,14 +71,16 @@ export const OrderForm: React.FC = () => {
+           setFormData({
+             orderNumber: order.orderNumber,
+             clientId: order.clientId?.toString() || '',
+-            productId: order.productId?.toString() || '',
+-            plannedQty: order.plannedQty?.toString() || '',
+-            unit: order.unit || 'Metros',
++            deliveryDate: order.deliveryDate ? order.deliveryDate.split('T')[0] : '',
++            products: order.products?.length > 0 
++              ? order.products.map((p: any) => ({ productId: p.productId.toString(), plannedQty: p.plannedQty }))
++              : [{ productId: '', plannedQty: '' }],
+             creatorId: order.creatorId?.toString() || '1',
+             machineId: order.machineId?.toString() || '',
+             operatorIds: order.operators?.map((o: any) => o.operatorId.toString()) || [],
+             operatorsText: order.operatorsText || '',
+-            observations: order.technicalSpec?.observations || '',
++            specifications: order.specifications || '',
++            observations: order.observations || '',
+             technicalSpec: {
+               materialMeasure: order.technicalSpec?.materialMeasure || '',
+               cut: order.technicalSpec?.cut || '',
+@@ -139,8 +100,9 @@ export const OrderForm: React.FC = () => {
+               sequence: c.sequence,
+               colorName: c.colorName,
+               formula: c.formula || '',
+-              insumoId: c.supplyId?.toString() || ''
+-            })) : [{ sequence: 1, colorName: '', formula: '', insumoId: '' }]
++              batchNumber: c.batchNumber || '',
++              changesToConsider: c.changesToConsider || ''
++            })) : [{ sequence: 1, colorName: '', formula: '', batchNumber: '', changesToConsider: '' }]
+           });
+         }
+       } catch (err) {
+@@ -148,11 +110,7 @@ export const OrderForm: React.FC = () => {
+       }
+     };
+     fetchData();
+-
+-    if (user?.role === 'MACHINE' && user.machine) {
+-        setActiveStage(user.machine.type as any);
+-    }
+-  }, [id, isEditing, user]);
++  }, [id, isEditing]);
+ 
+   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+     const { name, value } = e.target;
+@@ -170,10 +128,45 @@ export const OrderForm: React.FC = () => {
+     }
+   };
+ 
+-  const handleStageInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+-    setStageData({ ...stageData, [e.target.name]: e.target.value });
++  const handleOperatorSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
++    const options = e.target.options;
++    const selected = [];
++    let textNames = [];
++    for (let i = 0; i < options.length; i++) {
++      if (options[i].selected) {
++        selected.push(options[i].value);
++        textNames.push(options[i].text);
++      }
++    }
++    setFormData(prev => ({ 
++      ...prev, 
++      operatorIds: selected,
++      operatorsText: textNames.join(', ')
++    }));
++  };
++
++  // Products Handlers
++  const handleProductChange = (index: number, field: string, value: string) => {
++    const newProducts = [...formData.products];
++    (newProducts[index] as any)[field] = value;
++    setFormData(prev => ({ ...prev, products: newProducts }));
+   };
+ 
++  const addProductRow = () => {
++    setFormData(prev => ({
++      ...prev,
++      products: [...prev.products, { productId: '', plannedQty: '' }]
++    }));
++  };
++
++  const removeProductRow = (index: number) => {
++    setFormData(prev => ({
++      ...prev,
++      products: prev.products.filter((_, i) => i !== index)
++    }));
++  };
++
++  // Colors Handlers
+   const handleColorChange = (index: number, field: string, value: string) => {
+     const newColors = [...formData.colorOrders];
+     (newColors[index] as any)[field] = value;
+@@ -185,7 +178,7 @@ export const OrderForm: React.FC = () => {
+       ...prev,
+       colorOrders: [
+         ...prev.colorOrders,
+-        { sequence: prev.colorOrders.length + 1, colorName: '', formula: '', insumoId: '' }
++        { sequence: prev.colorOrders.length + 1, colorName: '', formula: '', batchNumber: '', changesToConsider: '' }
+       ]
+     }));
+   };
+@@ -195,67 +188,35 @@ export const OrderForm: React.FC = () => {
+     setFormData(prev => ({ ...prev, colorOrders: newColors }));
+   };
+ 
+-  const addMaterialRow = () => {
+-    setMaterialLots([...materialLots, { lotNumber: '', kg: '', initialMeters: '', addedMeters: '0', finalMeters: '0', totalUsed: 0, observations: '' }]);
+-  };
+-
+-  const removeMaterialRow = (index: number) => {
+-    setMaterialLots(materialLots.filter((_, i) => i !== index));
+-  };
+-
+-  const handleMaterialChange = (index: number, field: string, value: string) => {
+-    const newLots = [...materialLots];
+-    newLots[index][field] = value;
+-    const initial = parseFloat(newLots[index].initialMeters) || 0;
+-    const added = parseFloat(newLots[index].addedMeters) || 0;
+-    const final = parseFloat(newLots[index].finalMeters) || 0;
+-    newLots[index].totalUsed = Math.max(0, initial + added - final);
+-    setMaterialLots(newLots);
+-  };
+-
+   const handleSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     setLoading(true);
+     setError(null);
+     setSuccess(false);
+ 
+-    if (!formData.operatorsText || formData.operatorsText.trim().length === 0) {
+-      setError("Debe seleccionar al menos un operador.");
++    if (!formData.deliveryDate) {
++      setError("La fecha de entrega es obligatoria.");
++      setLoading(false);
++      return;
++    }
++
++    if (formData.products.some(p => !p.productId || !p.plannedQty)) {
++      setError("Todos los productos deben tener un producto seleccionado y una cantidad.");
+       setLoading(false);
+       return;
+     }
+ 
+     try {
+-      let savedOrderId = id;
+       if (isEditing) {
+         await api.put(`/orders/${id}`, formData);
+       } else {
+-        const res = await api.post(`/orders`, formData);
+-        savedOrderId = res.data.id;
+-      }
+-
+-      // Si cargaron datos de produccion
+-      if (stageData.processedMeters || stageData.scrapKg || materialLots[0].lotNumber !== '') {
+-          const payload = {
+-            orderId: savedOrderId,
+-            type: activeStage,
+-            machineId: stageData.machineId || formData.machineId,
+-            operatorId: stageData.operatorId,
+-            scrapKg: stageData.scrapKg,
+-            observations: stageData.observations,
+-            materialLots: (activeStage === 'IMPRESION' || activeStage === 'LAMINACION') ? materialLots.filter(l => l.lotNumber !== '') : [],
+-            specificData: {
+-              exitSense: stageData.exitSense,
+-              processedMeters: stageData.processedMeters,
+-            }
+-          };
+-          await api.post(`/orders/processes`, payload);
++        await api.post(`/orders`, formData);
+       }
+ 
+       setSuccess(true);
+       window.scrollTo({ top: 0, behavior: 'smooth' });
+       setTimeout(() => {
+-        window.location.href = '/ordenes';
++        navigate('/ordenes');
+       }, 1500);
+     } catch (err: any) {
+       setError(err.response?.data?.error || "Error al guardar la orden");
+@@ -271,7 +232,7 @@ export const OrderForm: React.FC = () => {
+           <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.04em', background: 'linear-gradient(90deg, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+             {isEditing ? 'Editar Nota de Pedido' : 'Nueva Nota de Pedido'}
+           </h1>
+-          <p style={{ color: 'var(--text-muted)' }}>Digitalizaci├│n y avance de producci├│n.</p>
++          <p style={{ color: 'var(--text-muted)' }}>Carga y planificaci├│n de producci├│n.</p>
+         </div>
+         <button 
+           type="submit"
+@@ -303,30 +264,28 @@ export const OrderForm: React.FC = () => {
+         </div>
+       )}
+ 
+-      <FormSection title="Origen y Personal" icon={<Users size={24} />}>
++      <FormSection title="Asignaci├│n de M├íquina y Operador" icon={<Users size={24} />}>
+         <div>
+-          <label className="label">M├íquina</label>
+-          {user?.role === 'MACHINE' ? (
+-            <div className="input" style={{ backgroundColor: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+-              <Cpu size={16} /> {user.machine?.name} ({user.machine?.code})
+-            </div>
+-          ) : (
+-            <select name="machineId" value={formData.machineId} onChange={handleInputChange} className="input" required>
+-              <option value="">Seleccione una m├íquina...</option>
+-              {machines.map(m => <option key={m.id} value={m.id}>{m.name} ({m.code})</option>)}
+-            </select>
+-          )}
++          <label className="label">M├íquina Asignada</label>
++          <select name="machineId" value={formData.machineId} onChange={handleInputChange} className="input">
++            <option value="">Seleccione una m├íquina...</option>
++            {machines.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
++          </select>
+         </div>
+-        <div style={{ gridColumn: 'span 2' }}>
+-          <label className="label">Operador(es) de Turno (Escriba los nombres)</label>
+-          <input 
+-            name="operatorsText" 
+-            value={formData.operatorsText} 
+-            onChange={handleInputChange} 
+-            className="input" 
+-            placeholder="Ej: Juan P├®rez, Roberto G├│mez" 
+-            required 
+-          />
++        <div>
++          <label className="label">Operador(es) Asignado(s)</label>
++          <select 
++            multiple
++            value={formData.operatorIds}
++            onChange={handleOperatorSelect}
++            className="input"
++            style={{ height: '80px' }}
++          >
++            {operators.map(o => (
++              <option key={o.id} value={o.id}>{o.firstName} {o.lastName}</option>
++            ))}
++          </select>
++          <small style={{ color: 'var(--text-muted)' }}>Mantenga presionado Ctrl (o Cmd) para seleccionar m├║ltiples.</small>
+         </div>
+       </FormSection>
+ 
+@@ -343,19 +302,81 @@ export const OrderForm: React.FC = () => {
+           </select>
+         </div>
+         <div>
+-          <label className="label">Producto Terminado</label>
+-          <select name="productId" value={formData.productId} onChange={handleInputChange} className="input" required>
+-            <option value="">Seleccione un producto...</option>
+-            {products.map(p => (
+-              <option key={p.id} value={p.id}>
+-                {p.name} ({p.code})
+-              </option>
+-            ))}
+-          </select>
++          <label className="label" style={{ color: 'var(--primary)' }}><Calendar size={16} style={{ display: 'inline', marginBottom: '-2px' }} /> Fecha de Entrega Obligatoria</label>
++          <input name="deliveryDate" value={formData.deliveryDate} onChange={handleInputChange} type="date" className="input" required />
+         </div>
+-        <div>
+-          <label className="label">Cantidad Planificada</label>
+-          <input name="plannedQty" value={formData.plannedQty} onChange={handleInputChange} type="number" className="input" placeholder="0.00" required />
++      </FormSection>
++
++      <FormSection title="Productos" icon={<Package size={24} />}>
++        <div style={{ gridColumn: 'span 2' }}>
++          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
++            <thead>
++              <tr>
++                <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Producto</th>
++                <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Cantidad Planificada (ej: 100 kg, 500 bolsas)</th>
++                <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Acci├│n</th>
++              </tr>
++            </thead>
++            <tbody>
++              {formData.products.map((prod, index) => (
++                <tr key={index} className="card-item" style={{ backgroundColor: 'rgba(255,255,255,0.02)' }}>
++                  <td style={{ padding: '0.5rem', width: '50%' }}>
++                    <select 
++                      value={prod.productId} 
++                      onChange={(e) => handleProductChange(index, 'productId', e.target.value)}
++                      className="input"
++                      required
++                    >
++                      <option value="">Seleccione un producto...</option>
++                      {productsList.map(p => (
++                        <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
++                      ))}
++                    </select>
++                  </td>
++                  <td style={{ padding: '0.5rem' }}>
++                    <input 
++                      value={prod.plannedQty} 
++                      onChange={(e) => handleProductChange(index, 'plannedQty', e.target.value)}
++                      type="text" className="input" placeholder="Ej: 500 bolsas" required
++                    />
++                  </td>
++                  <td style={{ padding: '0.5rem' }}>
++                    {formData.products.length > 1 && (
++                      <button 
++                        type="button"
++                        onClick={() => removeProductRow(index)}
++                        style={{ color: 'var(--danger)', background: 'none', padding: '0.5rem' }}
++                      >
++                        <Trash2 size={18} />
++                      </button>
++                    )}
++                  </td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++          <button 
++            type="button"
++            onClick={addProductRow}
++            className="btn" 
++            style={{ marginTop: '1rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(37, 99, 235, 0.1)' }}
++          >
++            <Plus size={18} /> A├▒adir Producto
++          </button>
++        </div>
++      </FormSection>
++
++      <FormSection title="Especificaciones / Observaciones" icon={<AlignLeft size={24} />}>
++        <div style={{ gridColumn: 'span 2' }}>
++          <label className="label">Aclaraciones importantes de la orden (cambios, cuidados especiales, etc.)</label>
++          <textarea 
++            name="specifications" 
++            value={formData.specifications} 
++            onChange={handleInputChange} 
++            className="input" 
++            style={{ minHeight: '100px' }}
++            placeholder="Ej: Cambios solicitados por el cliente, cuidados especiales..." 
++          />
+         </div>
+       </FormSection>
+ 
+@@ -416,7 +437,8 @@ export const OrderForm: React.FC = () => {
+                 <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>#</th>
+                 <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Nombre del Color</th>
+                 <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>F├│rmula Manual</th>
+-                <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Insumo ID</th>
++                <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>N├║mero de lote</th>
++                <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Cambios a tener en cuenta</th>
+                 <th className="label" style={{ textAlign: 'left', padding: '0.5rem' }}>Acci├│n</th>
+               </tr>
+             </thead>
+@@ -439,14 +461,18 @@ export const OrderForm: React.FC = () => {
+                     />
+                   </td>
+                   <td style={{ padding: '0.5rem' }}>
+-                    <select 
+-                      value={color.insumoId} 
+-                      onChange={(e) => handleColorChange(index, 'insumoId', e.target.value)}
+-                      className="input"
+-                    >
+-                      <option value="">Seleccionar...</option>
+-                      {supplies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+-                    </select>
++                    <input 
++                      value={color.batchNumber} 
++                      onChange={(e) => handleColorChange(index, 'batchNumber', e.target.value)}
++                      type="text" className="input" placeholder="Lote..." 
++                    />
++                  </td>
++                  <td style={{ padding: '0.5rem' }}>
++                    <input 
++                      value={color.changesToConsider} 
++                      onChange={(e) => handleColorChange(index, 'changesToConsider', e.target.value)}
++                      type="text" className="input" placeholder="Ej: Ajustar tono" 
++                    />
+                   </td>
+                   <td style={{ padding: '0.5rem' }}>
+                     <button 
+@@ -471,124 +497,6 @@ export const OrderForm: React.FC = () => {
+           </button>
+         </div>
+       </FormSection>
+-
+-      <FormSection title="Control de Producci├│n en Planta" icon={<Play size={24} />}>
+-            <div style={{ gridColumn: 'span 2' }}>
+-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+-                <StageTab 
+-                  active={activeStage === 'IMPRESION'} 
+-                  onClick={() => user?.role === 'ADMIN' && setActiveStage('IMPRESION')} 
+-                  icon={<Layers />} 
+-                  title="IMPRESI├ôN" 
+-                  step="1" 
+-                  disabled={user?.role === 'MACHINE' && user.machine?.type !== 'IMPRESION'}
+-                />
+-                <StageTab 
+-                  active={activeStage === 'LAMINACION'} 
+-                  onClick={() => user?.role === 'ADMIN' && setActiveStage('LAMINACION')} 
+-                  icon={<Droplets />} 
+-                  title="LAMINACI├ôN" 
+-                  step="2" 
+-                  disabled={user?.role === 'MACHINE' && user.machine?.type !== 'LAMINACION'}
+-                />
+-                <StageTab 
+-                  active={activeStage === 'REFILADO'} 
+-                  onClick={() => user?.role === 'ADMIN' && setActiveStage('REFILADO')} 
+-                  icon={<Scissors />} 
+-                  title="REFILADO" 
+-                  step="3" 
+-                  disabled={user?.role === 'MACHINE' && user.machine?.type !== 'REFILADO'}
+-                />
+-              </div>
+-
+-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+-                <div>
+-                    <label className="label">M├íquina Usada (Producci├│n)</label>
+-                    <select 
+-                      name="machineId" 
+-                      value={stageData.machineId} 
+-                      onChange={handleStageInputChange} 
+-                      className="input"
+-                    >
+-                        <option value="">Seleccionar m├íquina...</option>
+-                        {machines.filter(m => m.type === activeStage).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+-                    </select>
+-                </div>
+-                <div>
+-                    <label className="label">Operario de Producci├│n</label>
+-                    <select name="operatorId" value={stageData.operatorId} onChange={handleStageInputChange} className="input">
+-                        <option value="">Seleccionar operario...</option>
+-                        {operators.map(o => <option key={o.id} value={o.id}>{o.firstName} {o.lastName}</option>)}
+-                    </select>
+-                </div>
+-                {(activeStage === 'IMPRESION' || activeStage === 'REFILADO') && (
+-                    <div>
+-                        <label className="label">Sentido Salida</label>
+-                        <select name="exitSense" value={stageData.exitSense} onChange={handleStageInputChange} className="input">
+-                            <option>Sentido A</option>
+-                            <option>Sentido B</option>
+-                        </select>
+-                    </div>
+-                )}
+-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+-                    <div>
+-                        <label className="label">Metros Procesados</label>
+-                        <input name="processedMeters" value={stageData.processedMeters} onChange={handleStageInputChange} type="number" className="input" placeholder="0" />
+-                    </div>
+-                    <div>
+-                        <label className="label">Scrap Generado (Kg)</label>
+-                        <input name="scrapKg" value={stageData.scrapKg} onChange={handleStageInputChange} type="number" className="input" placeholder="0" />
+-                    </div>
+-                </div>
+-
+-                {(activeStage === 'IMPRESION' || activeStage === 'LAMINACION') && (
+-                  <div style={{ gridColumn: 'span 2', marginTop: '1.5rem' }}>
+-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+-                      <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--primary)' }}>Material Utilizado / Lotes</h4>
+-                      <button type="button" onClick={addMaterialRow} className="btn" style={{ fontSize: '0.75rem', padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid var(--primary)', color: 'var(--primary)' }}>
+-                        <Plus size={14} /> Agregar Lote
+-                      </button>
+-                    </div>
+-                    <div style={{ overflowX: 'auto' }}>
+-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+-                        <thead>
+-                          <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+-                            <th style={{ padding: '0.5rem' }}>Lote</th>
+-                            <th>Kg</th>
+-                            <th>Inic. (m)</th>
+-                            <th>Agreg. (m)</th>
+-                            <th>Sobr. (m)</th>
+-                            <th>Total (m)</th>
+-                            <th></th>
+-                          </tr>
+-                        </thead>
+-                        <tbody>
+-                          {materialLots.map((lot, idx) => (
+-                            <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+-                              <td style={{ padding: '0.5rem 0.2rem' }}><input className="input" style={{ padding: '0.3rem', fontSize: '0.75rem' }} value={lot.lotNumber} onChange={(e) => handleMaterialChange(idx, 'lotNumber', e.target.value)} placeholder="N┬░ Lote" /></td>
+-                              <td style={{ width: '60px' }}><input className="input" style={{ padding: '0.3rem', fontSize: '0.75rem' }} value={lot.kg} onChange={(e) => handleMaterialChange(idx, 'kg', e.target.value)} type="number" /></td>
+-                              <td style={{ width: '80px' }}><input className="input" style={{ padding: '0.3rem', fontSize: '0.75rem' }} value={lot.initialMeters} onChange={(e) => handleMaterialChange(idx, 'initialMeters', e.target.value)} type="number" /></td>
+-                              <td style={{ width: '80px' }}><input className="input" style={{ padding: '0.3rem', fontSize: '0.75rem' }} value={lot.addedMeters} onChange={(e) => handleMaterialChange(idx, 'addedMeters', e.target.value)} type="number" /></td>
+-                              <td style={{ width: '80px' }}><input className="input" style={{ padding: '0.3rem', fontSize: '0.75rem' }} value={lot.finalMeters} onChange={(e) => handleMaterialChange(idx, 'finalMeters', e.target.value)} type="number" /></td>
+-                              <td style={{ fontWeight: 800, color: 'var(--primary)', textAlign: 'center' }}>{lot.totalUsed}</td>
+-                              <td style={{ textAlign: 'right' }}>
+-                                <button type="button" onClick={() => removeMaterialRow(idx)} style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={16} /></button>
+-                              </td>
+-                            </tr>
+-                          ))}
+-                        </tbody>
+-                      </table>
+-                    </div>
+-                  </div>
+-                )}
+-                
+-                <div style={{ gridColumn: 'span 2' }}>
+-                  <label className="label">Observaciones Adicionales / Novedades de Turno</label>
+-                  <textarea name="observations" value={stageData.observations} onChange={handleStageInputChange} className="input" style={{ height: '80px' }} placeholder="Opcional. Detalle aqu├¡ si hubo roturas, demoras, etc."></textarea>
+-                </div>
+-              </div>
+-            </div>
+-      </FormSection>
+     </form>
+   );
+ };
+diff --git a/frontend/src/pages/OrdersList.tsx b/frontend/src/pages/OrdersList.tsx
+index 483534c..77cba97 100644
+--- a/frontend/src/pages/OrdersList.tsx
++++ b/frontend/src/pages/OrdersList.tsx
+@@ -40,7 +40,7 @@ export const OrdersList: React.FC = () => {
+       const url = window.URL.createObjectURL(new Blob([res.data]));
+       const link = document.createElement('a');
+       link.href = url;
+-      link.setAttribute('download', 'ordenes_belen.csv');
++      link.setAttribute('download', 'ordenes_silcar.csv');
+       document.body.appendChild(link);
+       link.click();
+       link.remove();
+@@ -71,9 +71,9 @@ export const OrdersList: React.FC = () => {
+     
+     const matchesStatus = filterStatus === 'ALL' || order.status === filterStatus;
+     
+-    const matchesDate = !filterDate || new Date(order.createdAt).toLocaleDateString() === new Date(filterDate).toLocaleDateString();
++    const matchesDate = !filterDate || new Date(order.deliveryDate).toLocaleDateString() === new Date(filterDate).toLocaleDateString();
+     
+-    const matchesMachine = filterMachine === 'ALL' || order.processes?.some((p: any) => p.machineId === parseInt(filterMachine));
++    const matchesMachine = filterMachine === 'ALL' || order.machineId === parseInt(filterMachine);
+ 
+     return matchesSearch && matchesStatus && matchesDate && matchesMachine;
+   });
+@@ -126,8 +126,10 @@ export const OrdersList: React.FC = () => {
+           </div>
+           <select className="input" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+             <option value="ALL">Todos los estados</option>
+-            <option value="EN_PROCESO">En Proceso</option>
+-            <option value="FINALIZADA">Finalizada</option>
++            <option value="├ôrdenes por realizar">├ôrdenes por realizar</option>
++            <option value="En proceso">En Proceso</option>
++            <option value="Finalizadas">Finalizadas</option>
++            <option value="Entregadas">Entregadas</option>
+           </select>
+           <select className="input" value={filterMachine} onChange={(e) => setFilterMachine(e.target.value)}>
+             <option value="ALL">Todas las m├íquinas</option>
+@@ -138,6 +140,7 @@ export const OrdersList: React.FC = () => {
+             className="input" 
+             value={filterDate}
+             onChange={(e) => setFilterDate(e.target.value)}
++            title="Filtrar por fecha de entrega"
+           />
+         </div>
+       </div>
+@@ -151,8 +154,8 @@ export const OrdersList: React.FC = () => {
+               <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                 <th style={{ padding: '1.25rem' }}>N┬░ Orden</th>
+                 <th>Cliente</th>
+-                <th>Producto</th>
+-                <th>Fecha</th>
++                <th>Productos</th>
++                <th>Fecha Entrega</th>
+                 <th>Estado</th>
+                 <th>Acciones</th>
+               </tr>
+@@ -162,11 +165,26 @@ export const OrdersList: React.FC = () => {
+                 <tr key={order.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }} className="hover-row">
+                   <td style={{ padding: '1.25rem', fontWeight: 700, color: 'var(--primary)' }}>{order.orderNumber}</td>
+                   <td style={{ color: 'var(--text-muted)' }}>{order.client?.name}</td>
+-                  <td>{order.product?.name}</td>
+-                  <td style={{ fontSize: '0.85rem' }}>{new Date(order.createdAt).toLocaleDateString()}</td>
++                  <td style={{ fontSize: '0.85rem' }}>
++                    {order.products?.map((p: any) => p.product.name).join(', ') || '-'}
++                  </td>
++                  <td style={{ fontSize: '0.85rem' }}>{order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : '-'}</td>
+                   <td>
+-                    <span className={`status-badge status-${order.status.toLowerCase()}`}>
+-                      {order.status.replace('_', ' ')}
++                    <span className={`status-badge`} style={{
++                      backgroundColor: order.status === '├ôrdenes por realizar' ? 'rgba(234,179,8,0.1)' :
++                                       order.status === 'En proceso' ? 'rgba(59,130,246,0.1)' :
++                                       order.status === 'Finalizadas' ? 'rgba(168,85,247,0.1)' :
++                                       'rgba(34,197,94,0.1)',
++                      color: order.status === '├ôrdenes por realizar' ? '#eab308' :
++                             order.status === 'En proceso' ? '#3b82f6' :
++                             order.status === 'Finalizadas' ? '#a855f7' :
++                             '#22c55e',
++                      padding: '0.25rem 0.75rem',
++                      borderRadius: '9999px',
++                      fontSize: '0.75rem',
++                      fontWeight: 700
++                    }}>
++                      {order.status}
+                     </span>
+                   </td>
+                   <td>
+diff --git a/frontend/src/pages/StockView.tsx b/frontend/src/pages/StockView.tsx
+index 3479049..705be29 100644
+--- a/frontend/src/pages/StockView.tsx
++++ b/frontend/src/pages/StockView.tsx
+@@ -1,12 +1,58 @@
+ import React, { useState, useEffect } from 'react';
+ import api from '../services/api';
+-import { Package, Droplets, Search, ArrowUpRight, ArrowDownRight, Download } from 'lucide-react';
++import { Package, Droplets, Search, ArrowUpRight, ArrowDownRight, Download, Edit2, Check, X } from 'lucide-react';
+ 
+ export const StockView: React.FC = () => {
+     const [items, setItems] = useState<any[]>([]);
+     const [searchTerm, setSearchTerm] = useState("");
+     const [filterCategory, setFilterCategory] = useState("ALL");
+     const [loading, setLoading] = useState(true);
++    
++    // Edit state
++    const [editingId, setEditingId] = useState<string | null>(null);
++    const [editMinStock, setEditMinStock] = useState<number>(0);
++    const [editControlType, setEditControlType] = useState<string>("unidad");
++
++    const fetchStock = async () => {
++        try {
++            const [pRes, sRes] = await Promise.all([
++                api.get(`/products`),
++                api.get(`/supplies`)
++            ]);
++            
++            const allItems = [
++                ...pRes.data.map((p: any) => ({ 
++                    ...p, 
++                    itemId: `prod_${p.id}`,
++                    itemType: 'PRODUCTO',
++                    category: 'PRODUCTO', 
++                    stockLevel: p.stock?.stockActual || 0,
++                    minStock: p.stock?.minStock ?? 10,
++                    controlType: p.stock?.controlType || 'unidad',
++                    realUnit: p.unit
++                })),
++                ...sRes.data.map((s: any) => ({ 
++                    ...s, 
++                    itemId: `sup_${s.id}`,
++                    itemType: 'INSUMO',
++                    category: s.type || 'INSUMO', 
++                    stockLevel: s.stock?.stockActual || 0,
++                    minStock: s.stock?.minStock ?? 10,
++                    controlType: s.stock?.controlType || 'unidad',
++                    realUnit: s.unit
++                }))
++            ];
++            setItems(allItems);
++        } catch (err) {
++            console.error(err);
++        } finally {
++            setLoading(false);
++        }
++    };
++
++    useEffect(() => {
++        fetchStock();
++    }, []);
+ 
+     const handleExport = async () => {
+         try {
+@@ -14,7 +60,7 @@ export const StockView: React.FC = () => {
+             const url = window.URL.createObjectURL(new Blob([res.data]));
+             const link = document.createElement('a');
+             link.href = url;
+-            link.setAttribute('download', 'stock_belen.csv');
++            link.setAttribute('download', 'stock_silcar.csv');
+             document.body.appendChild(link);
+             link.click();
+             link.remove();
+@@ -23,27 +69,32 @@ export const StockView: React.FC = () => {
+         }
+     };
+ 
+-    useEffect(() => {
+-        const fetchStock = async () => {
+-            try {
+-                const [pRes, sRes] = await Promise.all([
+-                    api.get(`/products`),
+-                    api.get(`/supplies`)
+-                ]);
+-                
+-                const allItems = [
+-                    ...pRes.data.map((p: any) => ({ ...p, category: 'PRODUCTO', stockLevel: p.stock?.stockActual || 0 })),
+-                    ...sRes.data.map((s: any) => ({ ...s, category: s.type || 'INSUMO', stockLevel: s.stock?.stockActual || 0 }))
+-                ];
+-                setItems(allItems);
+-            } catch (err) {
+-                console.error(err);
+-            } finally {
+-                setLoading(false);
+-            }
+-        };
+-        fetchStock();
+-    }, []);
++    const startEdit = (item: any) => {
++        setEditingId(item.itemId);
++        setEditMinStock(item.minStock);
++        setEditControlType(item.controlType);
++    };
++
++    const cancelEdit = () => {
++        setEditingId(null);
++    };
++
++    const saveEdit = async (item: any) => {
++        try {
++            await api.put('/stock/config', {
++                productId: item.category === 'PRODUCTO' ? item.id : null,
++                supplyId: item.category !== 'PRODUCTO' ? item.id : null,
++                itemType: item.itemType,
++                unit: item.realUnit,
++                minStock: editMinStock,
++                controlType: editControlType
++            });
++            await fetchStock();
++            setEditingId(null);
++        } catch (err) {
++            alert("Error al actualizar la configuraci├│n de stock");
++        }
++    };
+ 
+     const filteredItems = items.filter(item => {
+         const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+@@ -110,16 +161,18 @@ export const StockView: React.FC = () => {
+                             <th style={{ padding: '1.25rem 1.5rem' }}>Art├¡culo</th>
+                             <th>Categor├¡a</th>
+                             <th>Stock Disponible</th>
++                            <th>Stock M├¡nimo</th>
++                            <th>Control</th>
+                             <th>Estado</th>
+-                            <th>Precio (USD)</th>
+-                            <th style={{ paddingRight: '1.5rem', textAlign: 'right' }}>├Ültima Act.</th>
++                            <th style={{ paddingRight: '1.5rem', textAlign: 'right' }}>Acciones</th>
+                         </tr>
+                     </thead>
+                     <tbody>
+                         {filteredItems.map(item => {
+-                            const isLow = item.stockLevel < 100;
++                            const isEditing = editingId === item.itemId;
++                            const isLow = item.stockLevel < item.minStock;
+                             return (
+-                                <tr key={`${item.category}-${item.id}`} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }}>
++                                <tr key={item.itemId} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }}>
+                                     <td style={{ padding: '1.25rem 1.5rem' }}>
+                                         <p style={{ fontWeight: 800, margin: 0 }}>{item.code}</p>
+                                         <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>{item.name}</p>
+@@ -132,22 +185,54 @@ export const StockView: React.FC = () => {
+                                     <td>
+                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                             <span style={{ fontWeight: 800, fontSize: '1.1rem' }}>{item.stockLevel.toLocaleString()}</span>
+-                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.unit}</span>
++                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.controlType === 'kg' ? 'kg' : 'un'}</span>
+                                         </div>
+                                     </td>
++                                    <td>
++                                        {isEditing ? (
++                                            <input 
++                                                type="number" 
++                                                className="input" 
++                                                style={{ width: '80px', padding: '0.25rem' }} 
++                                                value={editMinStock} 
++                                                onChange={(e) => setEditMinStock(parseFloat(e.target.value))} 
++                                            />
++                                        ) : (
++                                            <span style={{ fontWeight: 600 }}>{item.minStock}</span>
++                                        )}
++                                    </td>
++                                    <td>
++                                        {isEditing ? (
++                                            <select 
++                                                className="input" 
++                                                style={{ padding: '0.25rem' }}
++                                                value={editControlType}
++                                                onChange={(e) => setEditControlType(e.target.value)}
++                                            >
++                                                <option value="unidad">Unidad</option>
++                                                <option value="kg">Kg</option>
++                                            </select>
++                                        ) : (
++                                            <span style={{ textTransform: 'capitalize', color: 'var(--text-muted)' }}>{item.controlType}</span>
++                                        )}
++                                    </td>
+                                     <td>
+                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: isLow ? 'var(--danger)' : 'var(--success)' }}></div>
+                                             <span style={{ fontSize: '0.8rem', fontWeight: 600, color: isLow ? 'var(--danger)' : 'var(--success)' }}>
+-                                                {isLow ? 'Stock Bajo' : 'Saludable'}
++                                                {isLow ? '┬íReponer!' : 'Saludable'}
+                                             </span>
+                                         </div>
+                                     </td>
+-                                    <td style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
+-                                        ${(Math.random() * 5 + 1).toFixed(2)}
+-                                    </td>
+-                                    <td style={{ paddingRight: '1.5rem', textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+-                                        {new Date(item.updatedAt).toLocaleDateString()}
++                                    <td style={{ paddingRight: '1.5rem', textAlign: 'right' }}>
++                                        {isEditing ? (
++                                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
++                                                <button onClick={() => saveEdit(item)} style={{ color: 'var(--success)', background: 'none' }}><Check size={18} /></button>
++                                                <button onClick={cancelEdit} style={{ color: 'var(--danger)', background: 'none' }}><X size={18} /></button>
++                                            </div>
++                                        ) : (
++                                            <button onClick={() => startEdit(item)} style={{ color: 'var(--text-muted)', background: 'none' }}><Edit2 size={18} /></button>
++                                        )}
+                                     </td>
+                                 </tr>
+                             );
+diff --git a/frontend/src/services/api.ts b/frontend/src/services/api.ts
+index 074856f..798c031 100644
+--- a/frontend/src/services/api.ts
++++ b/frontend/src/services/api.ts
+@@ -5,7 +5,7 @@ const api = axios.create({
+ });
+ 
+ api.interceptors.request.use((config) => {
+-  const savedUser = localStorage.getItem('belen_user');
++  const savedUser = localStorage.getItem('silcar_user');
+   if (savedUser) {
+     const user = JSON.parse(savedUser);
+     if (user.machine?.id) {

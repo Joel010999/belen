@@ -1,0 +1,9 @@
+{
+  "build": {
+    "cmd": "npm run build",
+    "output": "dist"
+  },
+  "deploy": {
+    "cmd": "npx serve -s dist -l $PORT"
+  }
+}

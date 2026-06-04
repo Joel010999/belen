@@ -30,8 +30,26 @@ app.get('/api/machines', async (req, res) => res.json(await prisma.machine.findM
 app.get('/api/operators', async (req, res) => res.json(await prisma.operator.findMany()));
 app.get('/api/supplies', async (req, res) => res.json(await prisma.supply.findMany({ include: { stock: true } })));
 
-
-
+app.put('/api/stock/config', async (req, res) => {
+  const { productId, supplyId, itemType, unit, minStock } = req.body;
+  try {
+    const updated = await prisma.currentStock.upsert({
+      where: productId ? { productId: parseInt(productId) } : { supplyId: parseInt(supplyId) },
+      update: { minStock: parseFloat(minStock) },
+      create: {
+        productId: productId ? parseInt(productId) : null,
+        supplyId: supplyId ? parseInt(supplyId) : null,
+        itemType,
+        unit,
+        minStock: parseFloat(minStock),
+        stockActual: 0
+      }
+    });
+    res.json(updated);
+  } catch(e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(port, () => {
   console.log(`Belen Backend running on port ${port}`);
 });

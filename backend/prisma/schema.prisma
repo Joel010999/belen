@@ -27,6 +27,7 @@ model Product {
   updatedAt   DateTime          @updatedAt
   stock       CurrentStock?
   orders      ProductionOrder[]
+  orderProducts OrderProduct[]
 }
 
 model Supply {
@@ -46,15 +47,19 @@ model ProductionOrder {
   orderNumber    String              @unique
   date           DateTime            @default(now())
   clientId       Int
-  productId      Int
+  productId      Int?
   sampleId       Int?
-  plannedQty     Float
+  plannedQty     String?
   producedQty    Float               @default(0)
   unit           String
-  deliveryDate   DateTime?
+  deliveryDate   DateTime
   priority       Int                 @default(1)
-  status         String              @default("EN_PROCESO")
+  status         String              @default("Órdenes por realizar")
   observations   String?
+  specifications String?
+  approvedPrinting   Boolean         @default(false)
+  approvedLamination Boolean         @default(false)
+  approvedRefilado   Boolean         @default(false)
   creatorId      Int
   machineId      Int?
   operatorsText  String?
@@ -69,12 +74,16 @@ model ProductionOrder {
   machine        Machine?            @relation("CreatedOnMachine", fields: [machineId], references: [id])
   operators      OrderOperator[]
   sample         Sample?             @relation(fields: [sampleId], references: [id])
-  product        Product             @relation(fields: [productId], references: [id])
+  product        Product?            @relation(fields: [productId], references: [id])
   client         Client              @relation(fields: [clientId], references: [id])
   processes      ProductionProcess[]
   result         ProductionResult?
   stockMovements StockMovement[]
   technicalSpec  TechnicalSpec?
+  
+  products       OrderProduct[]
+  checklists     ProcessChecklist[]
+  qualityControls QualityControl[]
 }
 
 model OrderOperator {
@@ -115,9 +124,10 @@ model ColorOrder {
   sequence     Int
   colorName    String
   supplyId     Int?
-  formula      String?
-  observations String?
-  order        ProductionOrder @relation(fields: [orderId], references: [id])
+  formula           String?
+  observations      String?
+  changesToConsider String?
+  order             ProductionOrder @relation(fields: [orderId], references: [id])
 }
 
 model Consumption {
@@ -284,6 +294,7 @@ model CurrentStock {
   productId    Int?     @unique
   supplyId     Int?     @unique
   stockActual  Float    @default(0)
+  minStock     Float    @default(100)
   unit         String
   lastUpdate   DateTime @default(now())
   updateSource String?
@@ -345,6 +356,7 @@ model Operator {
   controls  FinalControl[]
   processes ProductionProcess[]
   orders    OrderOperator[]
+  checklists ProcessChecklist[]
   user      User?
 }
 
@@ -387,5 +399,46 @@ model Attachment {
   userId       Int
   order        ProductionOrder @relation(fields: [entityId], references: [id])
   user         User            @relation(fields: [userId], references: [id])
+}
+
+model OrderProduct {
+  id           Int             @id @default(autoincrement())
+  orderId      Int
+  productId    Int
+  plannedQty   String 
+  order        ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product      Product         @relation(fields: [productId], references: [id])
+}
+
+model ProcessChecklist {
+  id         Int             @id @default(autoincrement())
+  orderId    Int
+  stage      String          
+  date       DateTime        @default(now())
+  operatorId Int
+  
+  order      ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  operator   Operator        @relation(fields: [operatorId], references: [id])
+  items      ProcessChecklistItem[]
+}
+
+model ProcessChecklistItem {
+  id          Int              @id @default(autoincrement())
+  checklistId Int
+  time        String           
+  controlName String           
+  checked     Boolean          @default(false)
+  value       String?
+  checklist   ProcessChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+}
+
+model QualityControl {
+  id          Int             @id @default(autoincrement())
+  orderId     Int
+  stage       String
+  date        DateTime        @default(now())
+  data        String          // JSON string storing specific fields for Impresión, Laminación or Refilación
+  
+  order       ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
