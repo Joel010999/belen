@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { OrdersList } from './pages/OrdersList';
@@ -12,6 +12,7 @@ import { MachinesView } from './pages/MachinesView';
 import { OperatorsView } from './pages/OperatorsView';
 import { LoginPage } from './pages/LoginPage';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 
 // Placeholder components for other routes
@@ -36,16 +37,19 @@ const AppContent = () => {
   return (
     <Router>
       <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/ordenes" element={<OrdersList />} />
-          <Route path="/ordenes/nueva" element={<OrderForm />} />
-          <Route path="/ordenes/editar/:id" element={<OrderForm />} />
-          <Route path="/ordenes/:id" element={<OrderDetail />} />
-          <Route path="/control" element={<QualityControl />} />
-          <Route path="/stock" element={<StockView />} />
-          <Route path="/transferencia" element={<ImportCSV />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/ordenes" element={<OrdersList />} />
+            <Route path="/ordenes/nueva" element={<OrderForm />} />
+            <Route path="/ordenes/editar/:id" element={<OrderForm />} />
+            <Route path="/ordenes/:id" element={<OrderDetail />} />
+            <Route path="/control" element={<QualityControl />} />
+            <Route path="/stock" element={<StockView />} />
+            <Route path="/transferencia" element={<ImportCSV />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </ErrorBoundary>
       </Layout>
     </Router>
   );
@@ -54,7 +58,9 @@ const AppContent = () => {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <ErrorBoundary>
+        <AppContent />
+      </ErrorBoundary>
     </AuthProvider>
   );
 }

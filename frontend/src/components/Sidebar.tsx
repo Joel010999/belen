@@ -44,7 +44,7 @@ export const Sidebar: React.FC = () => {
           if ('divider' in item) {
             return <div key={`divider-${index}`} className={styles.divider} />;
           }
-          const Icon = item.icon!;
+          const Icon = item.icon;
           const isActive = location.pathname === item.path;
           return (
             <Link 
@@ -52,7 +52,7 @@ export const Sidebar: React.FC = () => {
               to={item.path} 
               className={`${styles.navItem} ${isActive ? styles.active : ''}`}
             >
-              <Icon size={20} />
+              {Icon && <Icon size={20} />}
               <span>{item.label}</span>
             </Link>
           );

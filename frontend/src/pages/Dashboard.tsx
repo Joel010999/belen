@@ -20,8 +20,12 @@ export const Dashboard: React.FC = () => {
     const fetchStats = async () => {
       try {
         const res = await api.get('/orders/stats');
-        setStats(res.data.stats);
-        setRecentOrders(res.data.recentOrders);
+        if (res.data?.stats) {
+          setStats(prev => ({ ...prev, ...res.data.stats }));
+        }
+        if (res.data?.recentOrders && Array.isArray(res.data.recentOrders)) {
+          setRecentOrders(res.data.recentOrders);
+        }
       } catch (err) {
         console.error("Error fetching dashboard stats:", err);
       } finally {
