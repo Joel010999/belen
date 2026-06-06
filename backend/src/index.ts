@@ -51,7 +51,7 @@ app.put('/api/stock/config', async (req, res) => {
   }
 });
 app.listen(port, () => {
-  console.log(`Belen Backend running on port ${port}`);
+  console.log(`Silcar Backend running on port ${port}`);
 });
 
 export { prisma };

@@ -84,7 +84,7 @@ export const exportOrdersCSV = async (req: Request, res: Response) => {
     const content = Buffer.concat([bom, Buffer.from(csv, 'utf-8')]);
     
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename=ordenes_belen.csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=ordenes_silcar.csv');
     res.send(content);
   } catch (error: any) {
     res.status(500).json({ error: error.message });

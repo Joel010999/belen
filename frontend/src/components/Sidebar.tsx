@@ -36,7 +36,7 @@ export const Sidebar: React.FC = () => {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.logo}>
-        <h1>BELEN</h1>
+        <h1>SILCAR</h1>
         <span>Industrial OS</span>
       </div>
       <nav className={styles.nav}>

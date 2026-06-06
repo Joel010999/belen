@@ -53,7 +53,7 @@ export const LoginPage: React.FC = () => {
           }}>
             <Factory size={32} color="white" />
           </div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.5rem' }}>BELÉN</h1>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.5rem' }}>SILCAR</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Industrial Operation System</p>
         </div>
 
@@ -117,7 +117,7 @@ export const LoginPage: React.FC = () => {
         </form>
 
         <div style={{ marginTop: '2rem', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          &copy; 2026 Renderbyte Belén Industrial
+          &copy; 2026 Renderbyte Silcar Industrial
         </div>
       </div>
     </div>

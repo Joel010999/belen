@@ -13,7 +13,7 @@ const sendCSV = (res: Response, csv: string, filename: string) => {
 export const exportClients = async (req: Request, res: Response) => {
   try {
     const csv = await exportService.exportClientsCSV();
-    sendCSV(res, csv, 'clientes_belen.csv');
+    sendCSV(res, csv, 'clientes_silcar.csv');
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -22,7 +22,7 @@ export const exportClients = async (req: Request, res: Response) => {
 export const exportStock = async (req: Request, res: Response) => {
   try {
     const csv = await exportService.exportStockCSV();
-    sendCSV(res, csv, 'stock_belen.csv');
+    sendCSV(res, csv, 'stock_silcar.csv');
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -31,7 +31,7 @@ export const exportStock = async (req: Request, res: Response) => {
 export const exportProducts = async (req: Request, res: Response) => {
   try {
     const csv = await exportService.exportProductsCSV();
-    sendCSV(res, csv, 'productos_precios_belen.csv');
+    sendCSV(res, csv, 'productos_precios_silcar.csv');
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

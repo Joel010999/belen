@@ -41,7 +41,7 @@ export const ImportCSV: React.FC = () => {
   const handleExport = async (type: string) => {
     try {
       const endpoint = type === 'STOCK' ? 'stock' : type === 'PRECIOS' ? 'products' : 'clients';
-      const filename = type === 'STOCK' ? 'stock_belen.csv' : type === 'PRECIOS' ? 'productos_precios_belen.csv' : 'clientes_belen.csv';
+      const filename = type === 'STOCK' ? 'stock_silcar.csv' : type === 'PRECIOS' ? 'productos_precios_silcar.csv' : 'clientes_silcar.csv';
       
       const res = await api.get(`/export/${endpoint}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));

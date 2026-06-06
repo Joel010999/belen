@@ -1,4 +1,4 @@
-# Belén Industrial Management System
+# Silcar Industrial Management System
 
 Sistema de gestión de producción industrial para fábricas de empaquetado flexible.
 

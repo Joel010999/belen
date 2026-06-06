@@ -5,7 +5,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const savedUser = localStorage.getItem('belen_user');
+  const savedUser = localStorage.getItem('silcar_user');
   if (savedUser) {
     const user = JSON.parse(savedUser);
     if (user.machine?.id) {
