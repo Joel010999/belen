@@ -30,7 +30,7 @@ export const Sidebar: React.FC = () => {
   const { user } = useAuth();
 
   const filteredItems = menuItems.filter(item => 
-    !item.roles || item.roles.includes(user?.role || '')
+    !item.roles || item.roles.map(r => r.toUpperCase()).includes((user?.role || '').toUpperCase())
   );
 
   return (

@@ -18,6 +18,10 @@ export const importClients = async (filePath: string, userId: number) => {
       .on('data', (data) => results.push(data))
       .on('end', async () => {
         read = results.length;
+        
+        // Reemplazo completo: borrar todos los clientes existentes
+        await prisma.client.deleteMany({});
+        
         for (const row of results) {
           try {
             const code = row.code?.trim();
@@ -74,6 +78,12 @@ export const importProducts = async (filePath: string, userId: number) => {
       .on('data', (data) => results.push(data))
       .on('end', async () => {
         read = results.length;
+
+        // Reemplazo completo: borrar stock, productos e insumos existentes
+        await prisma.currentStock.deleteMany({});
+        await prisma.product.deleteMany({});
+        await prisma.supply.deleteMany({});
+
         for (const row of results) {
           try {
             const code = row.code?.trim();
@@ -99,15 +109,12 @@ export const importProducts = async (filePath: string, userId: number) => {
                 inserted++;
               }
 
-              // Si hay valor en la columna 5 (classification), lo tomamos como stock inicial
-              const initialStock = parseFloat(row.classification?.trim() || '0');
-              if (initialStock > 0) {
-                await prisma.currentStock.upsert({
-                  where: { supplyId: supply.id },
-                  update: { stockActual: initialStock, lastUpdate: new Date() },
-                  create: { supplyId: supply.id, stockActual: initialStock, itemType: 'INSUMO', unit: 'UN' }
-                });
-              }
+              // Stock por defecto en cero al importar catálogo
+              await prisma.currentStock.upsert({
+                where: { supplyId: supply.id },
+                update: { stockActual: 0, lastUpdate: new Date() },
+                create: { supplyId: supply.id, stockActual: 0, itemType: type, unit: 'UN' }
+              });
             } else {
               const existing = await prisma.product.findUnique({ where: { code } });
               const data = { code, name, unit: 'UN', description: row.group?.trim() };
@@ -120,15 +127,12 @@ export const importProducts = async (filePath: string, userId: number) => {
                 inserted++;
               }
 
-              // Stock inicial desde la columna 5
-              const initialStock = parseFloat(row.classification?.trim() || '0');
-              if (initialStock > 0) {
-                await prisma.currentStock.upsert({
-                  where: { productId: product.id },
-                  update: { stockActual: initialStock, lastUpdate: new Date() },
-                  create: { productId: product.id, stockActual: initialStock, itemType: 'PRODUCTO', unit: 'UN' }
-                });
-              }
+              // Stock por defecto en cero al importar catálogo
+              await prisma.currentStock.upsert({
+                where: { productId: product.id },
+                update: { stockActual: 0, lastUpdate: new Date() },
+                create: { productId: product.id, stockActual: 0, itemType: 'PRODUCTO', unit: 'UN' }
+              });
             }
           } catch (err: any) {
             errors++;
@@ -158,7 +162,7 @@ export const importProducts = async (filePath: string, userId: number) => {
 
 export const importStock = async (filePath: string, userId: number) => {
   const results: any[] = [];
-  let read = 0, updated = 0, errors = 0;
+  let read = 0, inserted = 0, autoCreated = 0, errors = 0;
   let errorLog = "";
 
   return new Promise((resolve, reject) => {
@@ -167,6 +171,10 @@ export const importStock = async (filePath: string, userId: number) => {
       .on('data', (data) => results.push(data))
       .on('end', async () => {
         read = results.length;
+
+        // Reemplazo completo: borrar todo el stock existente
+        await prisma.currentStock.deleteMany({});
+
         for (const row of results) {
           try {
             const code = row.code?.trim();
@@ -175,14 +183,14 @@ export const importStock = async (filePath: string, userId: number) => {
             if (!code) continue;
 
             // Buscar en Productos
-            const product = await prisma.product.findUnique({ where: { code } });
+            let product = await prisma.product.findUnique({ where: { code } });
             if (product) {
               await prisma.currentStock.upsert({
                 where: { productId: product.id },
                 update: { stockActual, lastUpdate: new Date() },
                 create: { productId: product.id, stockActual, itemType: 'PRODUCTO', unit: product.unit }
               });
-              updated++;
+              inserted++;
             } else {
               // Buscar en Insumos/Materiales
               const supply = await prisma.supply.findUnique({ where: { code } });
@@ -192,11 +200,17 @@ export const importStock = async (filePath: string, userId: number) => {
                   update: { stockActual, lastUpdate: new Date() },
                   create: { supplyId: supply.id, stockActual, itemType: 'INSUMO', unit: supply.unit }
                 });
-                updated++;
+                inserted++;
               } else {
-                // No existe ni como producto ni como insumo
-                errorLog += `Código ${code} no encontrado en maestros de productos ni insumos.\n`;
-                errors++;
+                // No existe: crear producto automáticamente
+                product = await prisma.product.create({
+                  data: { code, name: `Producto ${code}`, unit: 'UN' }
+                });
+                await prisma.currentStock.create({
+                  data: { productId: product.id, stockActual, itemType: 'PRODUCTO', unit: 'UN' }
+                });
+                autoCreated++;
+                inserted++;
               }
             }
           } catch (err: any) {
@@ -205,14 +219,18 @@ export const importStock = async (filePath: string, userId: number) => {
           }
         }
 
+        if (autoCreated > 0) {
+          errorLog = `Se crearon automáticamente ${autoCreated} productos nuevos (no existían en maestros).\n${errorLog}`;
+        }
+
         const log = await prisma.importLog.create({
           data: {
             userId,
             entityType: 'STOCK',
             fileName: filePath.split('/').pop() || 'unknown',
             readCount: read,
-            insertedCount: 0,
-            updatedCount: updated,
+            insertedCount: inserted,
+            updatedCount: autoCreated,
             errorCount: errors,
             errorLog,
             status: errors > 0 ? 'CON_ERRORES' : 'EXITOSO'
