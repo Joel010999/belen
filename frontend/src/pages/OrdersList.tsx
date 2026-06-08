@@ -80,7 +80,7 @@ export const OrdersList: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div className="header-actions-wrap" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
           <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.04em' }}>Órdenes de Producción</h1>
           <p style={{ color: 'var(--text-muted)' }}>Gestión integrada de pedidos y especificaciones.</p>
@@ -112,7 +112,7 @@ export const OrdersList: React.FC = () => {
       </div>
 
       <div className="card" style={{ marginBottom: '1.5rem', padding: '1.5rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '1rem' }}>
+        <div className="grid-filter" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '1rem' }}>
           <div style={{ position: 'relative' }}>
             <Search size={18} style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
             <input 
@@ -142,7 +142,7 @@ export const OrdersList: React.FC = () => {
         </div>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="card table-responsive" style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? (
            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando órdenes...</div>
         ) : (
@@ -160,16 +160,16 @@ export const OrdersList: React.FC = () => {
             <tbody>
               {filteredOrders.map(order => (
                 <tr key={order.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }} className="hover-row">
-                  <td style={{ padding: '1.25rem', fontWeight: 700, color: 'var(--primary)' }}>{order.orderNumber}</td>
-                  <td style={{ color: 'var(--text-muted)' }}>{order.client?.name}</td>
-                  <td>{order.product?.name}</td>
-                  <td style={{ fontSize: '0.85rem' }}>{new Date(order.createdAt).toLocaleDateString()}</td>
-                  <td>
+                  <td data-label="N° Orden" style={{ padding: '1.25rem', fontWeight: 700, color: 'var(--primary)' }}>{order.orderNumber}</td>
+                  <td data-label="Cliente" style={{ color: 'var(--text-muted)' }}>{order.client?.name}</td>
+                  <td data-label="Producto">{order.product?.name}</td>
+                  <td data-label="Fecha" style={{ fontSize: '0.85rem' }}>{new Date(order.createdAt).toLocaleDateString()}</td>
+                  <td data-label="Estado">
                     <span className={`status-badge status-${order.status.toLowerCase()}`}>
                       {order.status.replace('_', ' ')}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Acciones">
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <Link to={`/ordenes/${order.id}`} style={{ color: 'var(--text-muted)', background: 'none' }} title="Ver Detalle"><Eye size={18} /></Link>
                       <Link to={`/ordenes/editar/${order.id}`} style={{ color: 'var(--primary)', background: 'none' }} title="Editar Orden"><Edit size={18} /></Link>

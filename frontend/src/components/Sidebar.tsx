@@ -10,7 +10,8 @@ import {
   Palette, 
   Settings, 
   Users, 
-  UserSquare2 
+  UserSquare2,
+  X
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -25,7 +26,12 @@ const menuItems = [
   { icon: FileUp, label: 'Importación / Exportación', path: '/transferencia', roles: ['ADMIN'] },
 ];
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const { user } = useAuth();
 
@@ -34,30 +40,46 @@ export const Sidebar: React.FC = () => {
   );
 
   return (
-    <aside className={styles.sidebar}>
-      <div className={styles.logo}>
-        <h1>SILCAR</h1>
-        <span>Industrial OS</span>
-      </div>
-      <nav className={styles.nav}>
-        {filteredItems.map((item, index) => {
-          if ('divider' in item) {
-            return <div key={`divider-${index}`} className={styles.divider} />;
-          }
-          const Icon = item.icon;
-          const isActive = location.pathname === item.path;
-          return (
-            <Link 
-              key={item.path} 
-              to={item.path} 
-              className={`${styles.navItem} ${isActive ? styles.active : ''}`}
-            >
-              {Icon && <Icon size={20} />}
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-    </aside>
+    <>
+      {isOpen && (
+        <div 
+          className={styles.overlay} 
+          onClick={onClose}
+        />
+      )}
+      <aside className={`${styles.sidebar} ${isOpen ? styles.open : ''}`}>
+        <div className={styles.logo}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h1>SILCAR</h1>
+              <span>Industrial OS</span>
+            </div>
+            <button className={styles.closeBtn} onClick={onClose}>
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+        <nav className={styles.nav}>
+          {filteredItems.map((item, index) => {
+            if ('divider' in item) {
+              return <div key={`divider-${index}`} className={styles.divider} />;
+            }
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path;
+            return (
+              <Link 
+                key={item.path} 
+                to={item.path} 
+                onClick={onClose}
+                className={`${styles.navItem} ${isActive ? styles.active : ''}`}
+              >
+                {Icon && <Icon size={20} />}
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
+    </>
   );
 };

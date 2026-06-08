@@ -71,7 +71,7 @@ export const StockView: React.FC = () => {
 
     return (
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2rem' }}>
+            <div className="header-actions-wrap" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2rem' }}>
                 <div>
                     <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.04em' }}>Stock Operativo</h1>
                     <p style={{ color: 'var(--text-muted)' }}>Inventario centralizado de materias primas e insumos.</p>
@@ -118,7 +118,7 @@ export const StockView: React.FC = () => {
                 </div>
             </div>
 
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div className="card table-responsive" style={{ padding: 0, overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                         <tr style={{ textAlign: 'left', backgroundColor: 'rgba(255,255,255,0.02)', borderBottom: '2px solid var(--border)', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase' }}>
@@ -136,22 +136,24 @@ export const StockView: React.FC = () => {
                             const isLow = item.stockLevel < (item.minStock || 100);
                             return (
                                 <tr key={`${item.category}-${item.id}`} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }}>
-                                    <td style={{ padding: '1.25rem 1.5rem' }}>
-                                        <p style={{ fontWeight: 800, margin: 0 }}>{item.code}</p>
-                                        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>{item.name}</p>
+                                    <td data-label="Artículo" style={{ padding: '1.25rem 1.5rem' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                            <p style={{ fontWeight: 800, margin: 0 }}>{item.code}</p>
+                                            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>{item.name}</p>
+                                        </div>
                                     </td>
-                                    <td>
+                                    <td data-label="Categoría">
                                         <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '0.25rem 0.6rem', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.05)' }}>
                                             {item.category}
                                         </span>
                                     </td>
-                                    <td>
+                                    <td data-label="Stock Disponible">
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <span style={{ fontWeight: 800, fontSize: '1.1rem' }}>{item.stockLevel.toLocaleString()}</span>
                                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.unit}</span>
                                         </div>
                                     </td>
-                                    <td>
+                                    <td data-label="Stock Mínimo">
                                         <input 
                                             type="number" 
                                             defaultValue={item.minStock} 
@@ -160,7 +162,7 @@ export const StockView: React.FC = () => {
                                             style={{ width: '80px', padding: '0.4rem', fontSize: '0.875rem' }} 
                                         />
                                     </td>
-                                    <td>
+                                    <td data-label="Estado">
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: isLow ? 'var(--danger)' : 'var(--success)' }}></div>
                                             <span style={{ fontSize: '0.8rem', fontWeight: 600, color: isLow ? 'var(--danger)' : 'var(--success)' }}>
@@ -168,10 +170,10 @@ export const StockView: React.FC = () => {
                                             </span>
                                         </div>
                                     </td>
-                                    <td style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
+                                    <td data-label="Precio (USD)" style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
                                         ${(Math.random() * 5 + 1).toFixed(2)}
                                     </td>
-                                    <td style={{ paddingRight: '1.5rem', textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                    <td data-label="Última Act." style={{ paddingRight: '1.5rem', textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                         {new Date(item.updatedAt).toLocaleDateString()}
                                     </td>
                                 </tr>
