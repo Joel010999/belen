@@ -51,7 +51,7 @@ export const OrderForm: React.FC = () => {
     products: [{ productId: '', plannedQty: '' }],
     unit: 'Metros',
     creatorId: user?.id?.toString() || '1', 
-    machineId: user?.machine?.id?.toString() || '',
+    machineIds: user?.machine?.id ? [user.machine.id.toString()] : [] as string[],
     operatorIds: [] as string[],
     operatorsText: '',
     technicalSpec: {
@@ -107,7 +107,9 @@ export const OrderForm: React.FC = () => {
               : [{ productId: order.productId?.toString() || '', plannedQty: order.plannedQty?.toString() || '' }],
             unit: order.unit || 'Metros',
             creatorId: order.creatorId?.toString() || '1',
-            machineId: order.machineId?.toString() || '',
+            machineIds: order.processes?.some((p: any) => p.status === 'Planificada') 
+                ? order.processes.filter((p: any) => p.status === 'Planificada' && p.machineId).map((p: any) => p.machineId.toString())
+                : (order.machineId ? [order.machineId.toString()] : []),
             operatorIds: order.operators?.map((o: any) => o.operatorId.toString()) || [],
             operatorsText: order.operatorsText || '',
             specifications: order.specifications || '',
@@ -210,6 +212,12 @@ export const OrderForm: React.FC = () => {
       return;
     }
 
+    if (formData.machineIds.length === 0 && user?.role !== 'MACHINE') {
+      setError("Debe seleccionar al menos una máquina.");
+      setLoading(false);
+      return;
+    }
+
     try {
       let savedOrderId = id;
       if (isEditing) {
@@ -272,16 +280,31 @@ export const OrderForm: React.FC = () => {
 
       <FormSection title="Origen y Personal" icon={<Users size={24} />}>
         <div>
-          <label className="label">Máquina</label>
+          <label className="label">Máquina(s) (Puede seleccionar varias)</label>
           {user?.role === 'MACHINE' ? (
             <div className="input" style={{ backgroundColor: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Cpu size={16} /> {user.machine?.name} ({user.machine?.code})
             </div>
           ) : (
-            <select name="machineId" value={formData.machineId} onChange={handleInputChange} className="input" required>
-              <option value="">Seleccione una máquina...</option>
-              {machines.map(m => <option key={m.id} value={m.id}>{m.name} ({m.code})</option>)}
-            </select>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '8px', backgroundColor: 'rgba(15, 23, 42, 0.5)' }}>
+              {machines.map(m => (
+                <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={formData.machineIds.includes(m.id.toString())}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setFormData(prev => ({ ...prev, machineIds: [...prev.machineIds, m.id.toString()] }));
+                      } else {
+                        setFormData(prev => ({ ...prev, machineIds: prev.machineIds.filter(id => id !== m.id.toString()) }));
+                      }
+                    }}
+                    style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
+                  />
+                  {m.name} ({m.code})
+                </label>
+              ))}
+            </div>
           )}
         </div>
         <div style={{ gridColumn: 'span 2' }}>

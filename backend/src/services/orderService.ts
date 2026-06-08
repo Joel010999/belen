@@ -18,11 +18,11 @@ export const createOrder = async (orderData: any) => {
     plannedQty, 
     unit, 
     creatorId,
-    machineId,
     operatorIds,
     technicalSpec,
     colorOrders,
     products,
+    machineIds,
     deliveryDate,
     specifications,
     observations
@@ -46,7 +46,7 @@ export const createOrder = async (orderData: any) => {
         unit,
         deliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
         creatorId: finalCreatorId,
-        machineId: machineId ? parseInt(machineId) : null,
+        machineId: (machineIds && machineIds.length > 0) ? parseInt(machineIds[0]) : null,
         operatorsText: orderData.operatorsText,
         status: 'Órdenes por realizar',
         specifications,
@@ -85,6 +85,23 @@ export const createOrder = async (orderData: any) => {
             operatorId: parseInt(opId)
           }
         });
+      }
+    }
+
+    // 2.5 Associate machines as planned processes
+    if (machineIds && Array.isArray(machineIds)) {
+      for (const mId of machineIds) {
+        const machine = await tx.machine.findUnique({ where: { id: parseInt(mId) } });
+        if (machine) {
+          await tx.productionProcess.create({
+            data: {
+              orderId: order.id,
+              type: machine.type,
+              status: 'Planificada',
+              machineId: machine.id
+            }
+          });
+        }
       }
     }
 
@@ -610,7 +627,7 @@ export const exportOrdersCSV = async () => {
 export const updateOrder = async (id: number, orderData: any) => {
   const { 
     orderNumber, clientId, productId, plannedQty, unit, 
-    machineId, operatorsText, technicalSpec, colorOrders
+    machineIds, operatorsText, technicalSpec, colorOrders
   } = orderData;
 
   return await prisma.$transaction(async (tx) => {
@@ -620,7 +637,7 @@ export const updateOrder = async (id: number, orderData: any) => {
         productId: parseInt(productId),
         plannedQty: plannedQty ? String(plannedQty) : null,
         unit,
-        machineId: machineId ? parseInt(machineId) : null,
+        machineId: (machineIds && machineIds.length > 0) ? parseInt(machineIds[0]) : null,
         operatorsText,
     };
     if (orderData.approvedPrinting !== undefined) dataToUpdate.approvedPrinting = orderData.approvedPrinting;
@@ -681,6 +698,26 @@ export const updateOrder = async (id: number, orderData: any) => {
             supplyId: parseSafeInt(color.insumoId),
           }
         });
+      }
+    }
+
+    if (machineIds && Array.isArray(machineIds)) {
+      // Remove previous planned processes for this order to recreate them
+      await tx.productionProcess.deleteMany({
+        where: { orderId: id, status: 'Planificada' }
+      });
+      for (const mId of machineIds) {
+        const machine = await tx.machine.findUnique({ where: { id: parseInt(mId) } });
+        if (machine) {
+          await tx.productionProcess.create({
+            data: {
+              orderId: id,
+              type: machine.type,
+              status: 'Planificada',
+              machineId: machine.id
+            }
+          });
+        }
       }
     }
 
