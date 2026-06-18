@@ -90,3 +90,48 @@ export const exportOrdersCSV = async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+export const changeStatus = async (req: Request, res: Response) => {
+  try {
+    const order = await orderService.changeStatus(parseInt(req.params.id as string), req.body.status);
+    res.json(order);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+export const getChecklists = async (req: Request, res: Response) => {
+  try {
+    const checklists = await orderService.getChecklists(parseInt(req.params.orderId as string));
+    res.json(checklists);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const saveChecklist = async (req: Request, res: Response) => {
+  try {
+    const checklist = await orderService.saveChecklist(req.body);
+    res.status(201).json(checklist);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+export const getQualityControls = async (req: Request, res: Response) => {
+  try {
+    const controls = await orderService.getQualityControls(parseInt(req.params.orderId as string));
+    res.json(controls);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const saveQualityControl = async (req: Request, res: Response) => {
+  try {
+    const control = await orderService.saveQualityControl(req.body);
+    res.status(201).json(control);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+};

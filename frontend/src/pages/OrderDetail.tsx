@@ -86,7 +86,6 @@ export const OrderDetail: React.FC = () => {
             <DataField label="Tubo" value={order?.technicalSpec?.tube} />
             <DataField label="Tipo Impresión" value={order?.technicalSpec?.printingType} />
             <DataField label="Pie" value={order?.technicalSpec?.pie} />
-            <DataField label="Clisé Centro" value={order?.technicalSpec?.cliseCenter} />
             <div style={{ gridColumn: 'span 2', marginTop: '1rem' }}>
               <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Especificaciones / Observaciones</p>
               <p style={{ fontSize: '0.875rem', fontWeight: 500, whiteSpace: 'pre-line' }}>{order.specifications || order.observations || '-'}</p>
@@ -151,7 +150,7 @@ export const OrderDetail: React.FC = () => {
                                 <td style={{ padding: '0.6rem 0.5rem', fontWeight: 800, color: 'var(--primary)' }}>{color.sequence}°</td>
                                 <td>{color.colorName}</td>
                                 <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{color.formula || '-'}</td>
-                                <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{color.supplyId || '-'}</td>
+                                <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{color.lotNumber || '-'}</td>
                                 <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{color.changesToConsider || '-'}</td>
                             </tr>
                         ))}

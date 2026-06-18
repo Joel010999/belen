@@ -109,9 +109,6 @@ model TechnicalSpec {
   designName       String?
   cabeza           String?
   printingType     String?
-  cliseCenter      String?
-  cliseLeft        String?
-  cliseRight       String?
   tacaRight        String?
   tacaLeft         String?
   techObservations String?
@@ -123,6 +120,7 @@ model ColorOrder {
   orderId      Int
   sequence     Int
   colorName    String
+  lotNumber    String?
   supplyId     Int?
   formula           String?
   observations      String?

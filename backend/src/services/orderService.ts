@@ -137,9 +137,6 @@ export const createOrder = async (orderData: any) => {
           designName: technicalSpec.designName,
           cabeza: technicalSpec.cabeza,
           printingType: technicalSpec.printingType,
-          cliseCenter: technicalSpec.cliseCenter,
-          cliseLeft: technicalSpec.cliseLeft,
-          cliseRight: technicalSpec.cliseRight,
         }
       });
     }
@@ -152,6 +149,7 @@ export const createOrder = async (orderData: any) => {
             orderId: order.id,
             sequence: parseSafeInt(color.sequence) || 0,
             colorName: color.colorName,
+            lotNumber: color.lotNumber,
             formula: color.formula,
             supplyId: parseSafeInt(color.insumoId),
             changesToConsider: color.changesToConsider,
@@ -545,9 +543,6 @@ export const exportOrdersCSV = async () => {
     'Pie',
     'Cant. Colores',
     'Tipo Impresión',
-    'Clisé Izq.',
-    'Clisé Centro',
-    'Clisé Der.',
     'Secuencia de Colores',
     'Fórmulas de Colores',
     'Etapa Impresión - Máquina',
@@ -599,9 +594,6 @@ export const exportOrdersCSV = async () => {
       o.technicalSpec?.pie || '',
       o.technicalSpec?.colorCount || '',
       o.technicalSpec?.printingType || '',
-      o.technicalSpec?.cliseLeft || '',
-      o.technicalSpec?.cliseCenter || '',
-      o.technicalSpec?.cliseRight || '',
       colorNames,
       colorFormulas,
       impresion?.machine?.name || '-',
@@ -663,9 +655,6 @@ export const updateOrder = async (id: number, orderData: any) => {
           designName: technicalSpec.designName,
           cabeza: technicalSpec.cabeza,
           printingType: technicalSpec.printingType,
-          cliseCenter: technicalSpec.cliseCenter,
-          cliseLeft: technicalSpec.cliseLeft,
-          cliseRight: technicalSpec.cliseRight,
         },
         create: {
           orderId: id,
@@ -679,9 +668,6 @@ export const updateOrder = async (id: number, orderData: any) => {
           designName: technicalSpec.designName,
           cabeza: technicalSpec.cabeza,
           printingType: technicalSpec.printingType,
-          cliseCenter: technicalSpec.cliseCenter,
-          cliseLeft: technicalSpec.cliseLeft,
-          cliseRight: technicalSpec.cliseRight,
         }
       });
     }
@@ -694,6 +680,7 @@ export const updateOrder = async (id: number, orderData: any) => {
             orderId: id,
             sequence: parseSafeInt(color.sequence) || 0,
             colorName: color.colorName,
+            lotNumber: color.lotNumber,
             formula: color.formula,
             supplyId: parseSafeInt(color.insumoId),
           }
@@ -722,5 +709,94 @@ export const updateOrder = async (id: number, orderData: any) => {
     }
 
     return order;
+  });
+};
+
+export const changeStatus = async (id: number, newStatus: string) => {
+  const validStatuses = ['Órdenes por realizar', 'En proceso', 'Finalizadas', 'Entregadas'];
+  if (!validStatuses.includes(newStatus)) {
+    throw new Error(`Estado inválido: ${newStatus}`);
+  }
+
+  const order = await prisma.productionOrder.findUnique({ where: { id } });
+  if (!order) throw new Error('Orden no encontrada');
+
+  if (newStatus === 'Entregadas' && order.status !== 'Finalizadas') {
+    throw new Error('Solo se puede marcar como Entregada una orden Finalizada');
+  }
+
+  return await prisma.productionOrder.update({
+    where: { id },
+    data: { status: newStatus }
+  });
+};
+
+// ---- Checklist CRUD ----
+export const getChecklists = async (orderId: number) => {
+  return await prisma.processChecklist.findMany({
+    where: { orderId },
+    include: { items: true, operator: true },
+    orderBy: { date: 'desc' }
+  });
+};
+
+export const saveChecklist = async (data: any) => {
+  const { orderId, stage, operatorId, items } = data;
+
+  const existing = await prisma.processChecklist.findFirst({
+    where: { orderId: parseInt(orderId), stage }
+  });
+
+  if (existing) {
+    await prisma.processChecklistItem.deleteMany({ where: { checklistId: existing.id } });
+    await prisma.processChecklist.delete({ where: { id: existing.id } });
+  }
+
+  return await prisma.processChecklist.create({
+    data: {
+      orderId: parseInt(orderId),
+      stage,
+      operatorId: parseInt(operatorId),
+      items: {
+        create: items.map((item: any) => ({
+          time: item.time,
+          controlName: item.controlName,
+          checked: item.checked || false,
+          value: item.value || null
+        }))
+      }
+    },
+    include: { items: true }
+  });
+};
+
+// ---- Quality Control CRUD ----
+export const getQualityControls = async (orderId: number) => {
+  return await prisma.qualityControl.findMany({
+    where: { orderId },
+    orderBy: { date: 'desc' }
+  });
+};
+
+export const saveQualityControl = async (data: any) => {
+  const { orderId, stage, controlData } = data;
+
+  const existing = await prisma.qualityControl.findFirst({
+    where: { orderId: parseInt(orderId), stage }
+  });
+
+  if (existing) {
+    return await prisma.qualityControl.update({
+      where: { id: existing.id },
+      data: { data: JSON.stringify(controlData), date: new Date() }
+    });
+  }
+
+  return await prisma.qualityControl.create({
+    data: {
+      orderId: parseInt(orderId),
+      stage,
+      data: JSON.stringify(controlData)
+    }
   });
 };

@@ -65,12 +65,9 @@ export const OrderForm: React.FC = () => {
       designName: '',
       cabeza: '',
       printingType: 'Directa',
-      cliseCenter: '',
-      cliseLeft: '',
-      cliseRight: '',
     },
     colorOrders: [
-      { sequence: 1, colorName: '', formula: '', insumoId: '', changesToConsider: '' }
+      { sequence: 1, colorName: '', formula: '', lotNumber: '', changesToConsider: '' }
     ],
     specifications: '',
     observations: ''
@@ -125,17 +122,14 @@ export const OrderForm: React.FC = () => {
               designName: order.technicalSpec?.designName || '',
               cabeza: order.technicalSpec?.cabeza || '',
               printingType: order.technicalSpec?.printingType || 'Directa',
-              cliseCenter: order.technicalSpec?.cliseCenter || '',
-              cliseLeft: order.technicalSpec?.cliseLeft || '',
-              cliseRight: order.technicalSpec?.cliseRight || '',
             },
             colorOrders: order.colorOrders?.length > 0 ? order.colorOrders.map((c: any) => ({
               sequence: c.sequence,
               colorName: c.colorName,
               formula: c.formula || '',
-              insumoId: c.supplyId?.toString() || '',
+              lotNumber: c.lotNumber || '',
               changesToConsider: c.changesToConsider || ''
-            })) : [{ sequence: 1, colorName: '', formula: '', insumoId: '', changesToConsider: '' }]
+            })) : [{ sequence: 1, colorName: '', formula: '', lotNumber: '', changesToConsider: '' }]
           });
         }
       } catch (err) {
@@ -190,7 +184,7 @@ export const OrderForm: React.FC = () => {
       ...prev,
       colorOrders: [
         ...prev.colorOrders,
-        { sequence: prev.colorOrders.length + 1, colorName: '', formula: '', insumoId: '', changesToConsider: '' }
+        { sequence: prev.colorOrders.length + 1, colorName: '', formula: '', lotNumber: '', changesToConsider: '' }
       ]
     }));
   };
@@ -423,14 +417,6 @@ export const OrderForm: React.FC = () => {
             <option value="Retroverso">Retroverso</option>
           </select>
         </div>
-        <div style={{ gridColumn: 'span 2' }}>
-            <label className="label">Clisé (Izq | Centro | Der)</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                <input name="technicalSpec.cliseLeft" value={formData.technicalSpec.cliseLeft} onChange={handleInputChange} type="text" className="input" placeholder="Izquierda" />
-                <input name="technicalSpec.cliseCenter" value={formData.technicalSpec.cliseCenter} onChange={handleInputChange} type="text" className="input" placeholder="Centro" />
-                <input name="technicalSpec.cliseRight" value={formData.technicalSpec.cliseRight} onChange={handleInputChange} type="text" className="input" placeholder="Derecha" />
-            </div>
-        </div>
       </FormSection>
 
       <FormSection title="Secuencia de Colores" icon={<Layers size={24} />}>
@@ -465,14 +451,11 @@ export const OrderForm: React.FC = () => {
                     />
                   </td>
                   <td style={{ padding: '0.5rem' }}>
-                    <select 
-                      value={color.insumoId} 
-                      onChange={(e) => handleColorChange(index, 'insumoId', e.target.value)}
-                      className="input"
-                    >
-                      <option value="">Seleccionar...</option>
-                      {supplies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+                    <input 
+                      value={color.lotNumber || ''} 
+                      onChange={(e) => handleColorChange(index, 'lotNumber', e.target.value)}
+                      type="text" className="input" placeholder="Ej: LOTE-2024-001" 
+                    />
                   </td>
                   <td style={{ padding: '0.5rem' }}>
                     <input 
