@@ -41,18 +41,20 @@ export const OrderDetail: React.FC = () => {
             </div>
           </div>
         </div>
-        <Link 
-          to={`/ordenes/editar/${order.id}`} 
-          className="btn btn-primary" 
-          style={{ 
-            display: 'flex', alignItems: 'center', gap: '0.75rem', 
-            padding: '1rem 2rem', fontSize: '1rem', fontWeight: 700,
-            textDecoration: 'none',
-            boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)'
-          }}
-        >
-          <Edit size={20} /> EDITAR ORDEN
-        </Link>
+        {user?.role === 'ADMIN' && (
+          <Link 
+            to={`/ordenes/editar/${order.id}`} 
+            className="btn btn-primary" 
+            style={{ 
+              display: 'flex', alignItems: 'center', gap: '0.75rem', 
+              padding: '1rem 2rem', fontSize: '1rem', fontWeight: 700,
+              textDecoration: 'none',
+              boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)'
+            }}
+          >
+            <Edit size={20} /> EDITAR ORDEN
+          </Link>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem' }}>

@@ -102,7 +102,7 @@ export const OrdersList: React.FC = () => {
             <Download size={20} />
             Exportar CSV
           </button>
-          {(user?.role === 'ADMIN' || user?.role === 'MACHINE') && (
+          {user?.role === 'ADMIN' && (
             <Link to="/ordenes/nueva" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none', padding: '0.75rem 1.5rem' }}>
               <Plus size={20} />
               Nueva Orden
@@ -172,8 +172,12 @@ export const OrdersList: React.FC = () => {
                   <td data-label="Acciones">
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <Link to={`/ordenes/${order.id}`} style={{ color: 'var(--text-muted)', background: 'none' }} title="Ver Detalle"><Eye size={18} /></Link>
-                      <Link to={`/ordenes/editar/${order.id}`} style={{ color: 'var(--primary)', background: 'none' }} title="Editar Orden"><Edit size={18} /></Link>
-                      <button onClick={() => handleDelete(order.id)} style={{ color: 'var(--danger)', background: 'none' }} title="Eliminar"><Trash2 size={18} /></button>
+                      {user?.role === 'ADMIN' && (
+                        <>
+                          <Link to={`/ordenes/editar/${order.id}`} style={{ color: 'var(--primary)', background: 'none' }} title="Editar Orden"><Edit size={18} /></Link>
+                          <button onClick={() => handleDelete(order.id)} style={{ color: 'var(--danger)', background: 'none' }} title="Eliminar"><Trash2 size={18} /></button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
