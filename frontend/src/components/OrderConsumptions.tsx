@@ -202,7 +202,13 @@ export const OrderConsumptions: React.FC<ConsumptionsProps> = ({ order, onUpdate
             boxShadow: '0 4px 15px -3px rgba(37, 99, 235, 0.4)'
           }}
         >
-          {loading ? 'Procesando...' : success ? <><CheckCircle2 size={20} /> Confirmado</> : <><Save size={20} /> Confirmar Consumos</>}
+          {loading ? (
+            <span>Procesando...</span>
+          ) : success ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle2 size={20} /> Confirmado</span>
+          ) : (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Save size={20} /> Confirmar Consumos</span>
+          )}
         </button>
       </div>
       
