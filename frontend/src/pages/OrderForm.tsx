@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Save, Package, Ruler, ClipboardList, Layers, Plus, Trash2, Users, Cpu, Play, Droplets, Scissors } from 'lucide-react';
 import api from '../services/api';
 import { FormSection } from '../components/FormSection';
 import { useAuth } from '../hooks/useAuth';
+import { OrderConsumptions, type ConsumptionsRef } from '../components/OrderConsumptions';
 
 const StageTab = ({ active, onClick, icon, title, step, disabled }: any) => (
   <button 
@@ -33,6 +34,7 @@ export const OrderForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const isEditing = !!id;
   const { user } = useAuth();
+  const consumptionsRef = useRef<ConsumptionsRef>(null);
   
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<any[]>([]);
@@ -219,6 +221,17 @@ export const OrderForm: React.FC = () => {
       } else {
         const res = await api.post(`/orders`, formData);
         savedOrderId = res.data.id;
+      }
+
+      if (consumptionsRef.current) {
+        const consumptionsData = consumptionsRef.current.getConsumptionsData();
+        if (consumptionsData && consumptionsData.consumptions && consumptionsData.consumptions.length > 0) {
+          try {
+            await api.post(`/orders/${savedOrderId}/consumptions`, consumptionsData);
+          } catch (err) {
+            console.error("Error guardando consumos:", err);
+          }
+        }
       }
 
       setSuccess(true);
@@ -487,6 +500,12 @@ export const OrderForm: React.FC = () => {
           </button>
         </div>
       </FormSection>
+
+      <OrderConsumptions 
+        ref={consumptionsRef} 
+        order={formData} 
+        standalone={false} 
+      />
     </form>
   );
 };

@@ -1,13 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Droplet, Layers, Save, CheckCircle2 } from 'lucide-react';
 import api from '../services/api';
 
-interface ConsumptionsProps {
-  order: any;
-  onUpdate: () => void;
+export interface ConsumptionsRef {
+  getConsumptionsData: () => any;
+  clear: () => void;
 }
 
-export const OrderConsumptions: React.FC<ConsumptionsProps> = ({ order, onUpdate }) => {
+interface ConsumptionsProps {
+  order: any;
+  onUpdate?: () => void;
+  standalone?: boolean;
+}
+
+export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(({ order, onUpdate, standalone = true }, ref) => {
   const [activeTab, setActiveTab] = useState<'PRINTING' | 'LAMINATION'>('PRINTING');
   const [printingColors, setPrintingColors] = useState<any[]>([]);
   const [laminationSupplies, setLaminationSupplies] = useState<any[]>([]);
@@ -16,22 +22,32 @@ export const OrderConsumptions: React.FC<ConsumptionsProps> = ({ order, onUpdate
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (order.colorOrders) {
-      setPrintingColors(order.colorOrders.map((c: any) => ({
-        id: c.id,
-        colorName: c.colorName,
-        supplyId: c.supplyId,
-        loads: '',
-        endValue: '',
-        realQty: 0
-      })));
+    if (order?.colorOrders) {
+      setPrintingColors(prev => {
+        return order.colorOrders.map((c: any, index: number) => {
+          const existing = prev.find(p => (c.sequence && p.sequence === c.sequence) || p.colorName === c.colorName) || prev[index];
+          return {
+            id: c.id,
+            sequence: c.sequence,
+            colorName: c.colorName,
+            supplyId: c.supplyId || c.insumoId,
+            loads: existing?.loads || '',
+            endValue: existing?.endValue || '',
+            realQty: existing?.realQty || 0
+          };
+        });
+      });
     }
-    setLaminationSupplies([
-      { name: 'Adhesivo', supplyId: null, loads: '', endValue: '', realQty: 0 },
-      { name: 'Solvente', supplyId: null, loads: '', endValue: '', realQty: 0 },
-      { name: 'Reticulante', supplyId: null, loads: '', endValue: '', realQty: 0 }
-    ]);
-  }, [order]);
+    
+    setLaminationSupplies(prev => {
+      if (prev.length > 0) return prev;
+      return [
+        { name: 'Adhesivo', supplyId: null, loads: '', endValue: '', realQty: 0 },
+        { name: 'Solvente', supplyId: null, loads: '', endValue: '', realQty: 0 },
+        { name: 'Reticulante', supplyId: null, loads: '', endValue: '', realQty: 0 }
+      ];
+    });
+  }, [order?.colorOrders]);
 
   const parseLoads = (loadsStr: string) => {
     if (!loadsStr) return 0;
@@ -61,11 +77,8 @@ export const OrderConsumptions: React.FC<ConsumptionsProps> = ({ order, onUpdate
     setLaminationSupplies(updated);
   };
 
-  const handleSubmit = async () => {
-    setLoading(true);
-    setSuccess(false);
-    
-    const dataToSend = {
+  const getConsumptionsData = () => {
+    return {
       type: activeTab,
       realMeters: realMeters ? parseFloat(realMeters) : undefined,
       consumptions: activeTab === 'PRINTING' 
@@ -87,13 +100,29 @@ export const OrderConsumptions: React.FC<ConsumptionsProps> = ({ order, onUpdate
             unit: 'kg'
           }))
     };
+  };
+
+  useImperativeHandle(ref, () => ({
+    getConsumptionsData,
+    clear: () => {
+      setRealMeters('');
+      setPrintingColors(prev => prev.map(p => ({ ...p, loads: '', endValue: '', realQty: 0 })));
+      setLaminationSupplies(prev => prev.map(p => ({ ...p, loads: '', endValue: '', realQty: 0 })));
+    }
+  }));
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    setSuccess(false);
+    
+    const dataToSend = getConsumptionsData();
 
     try {
       await api.post(`/orders/${order.id}/consumptions`, dataToSend);
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
-        onUpdate();
+        if (onUpdate) onUpdate();
       }, 2000);
     } catch (error) {
       console.error('Error saving consumptions', error);
@@ -192,31 +221,33 @@ export const OrderConsumptions: React.FC<ConsumptionsProps> = ({ order, onUpdate
           />
         </div>
 
-        <button 
-          onClick={handleSubmit}
-          disabled={loading || success}
-          className="btn btn-primary" 
-          style={{ 
-            display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.8rem 1.5rem',
-            fontSize: '1rem', fontWeight: 700,
-            boxShadow: '0 4px 15px -3px rgba(37, 99, 235, 0.4)'
-          }}
-        >
-          {loading ? (
-            <span>Procesando...</span>
-          ) : success ? (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle2 size={20} /> Confirmado</span>
-          ) : (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Save size={20} /> Confirmar Consumos</span>
-          )}
-        </button>
+        {standalone && (
+          <button 
+            onClick={handleSubmit}
+            disabled={loading || success}
+            className="btn btn-primary" 
+            style={{ 
+              display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.8rem 1.5rem',
+              fontSize: '1rem', fontWeight: 700,
+              boxShadow: '0 4px 15px -3px rgba(37, 99, 235, 0.4)'
+            }}
+          >
+            {loading ? (
+              <span>Procesando...</span>
+            ) : success ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle2 size={20} /> Confirmado</span>
+            ) : (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Save size={20} /> Confirmar Consumos</span>
+            )}
+          </button>
+        )}
       </div>
       
-      {success && (
+      {success && standalone && (
         <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', borderRadius: '8px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
           <CheckCircle2 size={20} /> Cantidades descontadas del inventario correctamente.
         </div>
       )}
     </div>
   );
-};
+});

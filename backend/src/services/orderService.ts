@@ -534,6 +534,7 @@ export const exportOrdersCSV = async () => {
     'Cliente Nombre',
     'Producto Cod.',
     'Producto Nombre',
+    'Producto Cant. Usada (Metros)',
     'Cant. Planificada',
     'Unidad',
     'Medida Material',
@@ -544,20 +545,18 @@ export const exportOrdersCSV = async () => {
     'Pie',
     'Cant. Colores',
     'Tipo Impresión',
-    'Secuencia de Colores',
-    'Fórmulas de Colores',
+    'Códigos Insumos',
+    'Cantidades Insumos',
     'Etapa Impresión - Máquina',
     'Etapa Impresión - Operario',
     'Etapa Impresión - Metros',
     'Etapa Impresión - Scrap (Kg)',
     'Etapa Impresión - Lotes',
-    'Etapa Impresión - Consumos',
     'Etapa Laminación - Máquina',
     'Etapa Laminación - Operario',
     'Etapa Laminación - Metros',
     'Etapa Laminación - Scrap (Kg)',
     'Etapa Laminación - Lotes',
-    'Etapa Laminación - Consumos',
     'Etapa Refilado - Máquina',
     'Etapa Refilado - Operario',
     'Etapa Refilado - Metros',
@@ -569,23 +568,23 @@ export const exportOrdersCSV = async () => {
     const laminacion = o.processes.find((p: any) => p.type === 'LAMINACION');
     const refilado = o.processes.find((p: any) => p.type === 'REFILADO');
 
-    const colorNames = o.colorOrders?.map((c: any) => `${c.sequence}°${c.colorName}`).join(', ') || '';
-    const colorFormulas = o.colorOrders?.map((c: any) => `${c.sequence}°${c.formula || '-'}`).join(', ') || '';
-
     const formatLots = (proc: any) => {
       if (!proc?.materialLots || proc.materialLots.length === 0) return '-';
       return proc.materialLots.map((l: any) => `Lote:${l.lotNumber} ${l.totalUsedMeters}m`).join(', ');
     };
 
-    const consumosImpresion = o.consumptions
-      ?.filter((c: any) => c.type === 'PRINTING')
-      ?.map((c: any) => `${c.supply?.name}: ${c.realQty}${c.unit} (${c.observations || ''})`)
-      .join(' | ') || '-';
+    let productoCantidadUsada = 0;
+    if (impresion?.materialLots?.length > 0) {
+        productoCantidadUsada = impresion.materialLots.reduce((acc: number, l: any) => acc + (l.totalUsedMeters || 0), 0);
+    } else if (laminacion?.materialLots?.length > 0) {
+        productoCantidadUsada = laminacion.materialLots.reduce((acc: number, l: any) => acc + (l.totalUsedMeters || 0), 0);
+    } else if (refilado?.materialLots?.length > 0) {
+        productoCantidadUsada = refilado.materialLots.reduce((acc: number, l: any) => acc + (l.totalUsedMeters || 0), 0);
+    }
 
-    const consumosLaminacion = o.consumptions
-      ?.filter((c: any) => c.type === 'LAMINATION')
-      ?.map((c: any) => `${c.supply?.name}: ${c.realQty}${c.unit} (${c.observations || ''})`)
-      .join(' | ') || '-';
+    const consumos = o.consumptions || [];
+    const codigosInsumos = consumos.map((c: any) => c.supply?.code || c.supply?.name || '-').join(' / ');
+    const cantidadesInsumos = consumos.map((c: any) => `${c.realQty}${c.unit}`).join(' / ');
 
     return [
       o.orderNumber,
@@ -597,6 +596,7 @@ export const exportOrdersCSV = async () => {
       o.client?.name || '',
       o.product?.code || '',
       o.product?.name || '',
+      productoCantidadUsada > 0 ? productoCantidadUsada : '-',
       o.plannedQty,
       o.unit,
       o.technicalSpec?.materialMeasure || '',
@@ -607,20 +607,18 @@ export const exportOrdersCSV = async () => {
       o.technicalSpec?.pie || '',
       o.technicalSpec?.colorCount || '',
       o.technicalSpec?.printingType || '',
-      colorNames,
-      colorFormulas,
+      codigosInsumos || '-',
+      cantidadesInsumos || '-',
       impresion?.machine?.name || '-',
       impresion?.operator ? `${impresion.operator.firstName} ${impresion.operator.lastName}` : '-',
       impresion?.printingData?.processedMeters || '-',
       impresion?.scrapKg ?? '-',
       formatLots(impresion),
-      consumosImpresion,
       laminacion?.machine?.name || '-',
       laminacion?.operator ? `${laminacion.operator.firstName} ${laminacion.operator.lastName}` : '-',
       laminacion?.laminationData?.processedMeters || '-',
       laminacion?.scrapKg ?? '-',
       formatLots(laminacion),
-      consumosLaminacion,
       refilado?.machine?.name || '-',
       refilado?.operator ? `${refilado.operator.firstName} ${refilado.operator.lastName}` : '-',
       refilado?.refiladoData?.processedMeters || '-',
