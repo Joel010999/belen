@@ -10,6 +10,7 @@ router.get('/', orderController.getAllOrders);
 router.get('/:id', orderController.getOrderById);
 router.post('/processes', orderController.createProcess);
 router.post('/:id/finalize', orderController.finalizeOrder);
+router.post('/:id/consumptions', orderController.registerConsumptions);
 router.delete('/:id', orderController.deleteOrder);
 router.put('/:id', orderController.updateOrder);
 

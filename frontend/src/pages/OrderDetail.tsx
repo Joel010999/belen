@@ -4,6 +4,7 @@ import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { ClipboardList as Clipboard, Ruler, Layers, ArrowLeft, Play, FileText, Cpu, Users, Edit, ShieldCheck } from 'lucide-react';
 import { FormSection } from '../components/FormSection';
+import { OrderConsumptions } from '../components/OrderConsumptions';
 
 export const OrderDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,6 +25,15 @@ export const OrderDetail: React.FC = () => {
     };
     fetchData();
   }, [id]);
+
+  const refreshOrder = async () => {
+    try {
+      const orderRes = await api.get(`/orders/${id}`);
+      setOrder(orderRes.data);
+    } catch (err) {
+      console.error("Error refreshing order data:", err);
+    }
+  };
 
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center' }}>Cargando orden...</div>;
   if (!order) return <div style={{ padding: '3rem', textAlign: 'center' }}>Orden no encontrada.</div>;
@@ -194,6 +204,8 @@ export const OrderDetail: React.FC = () => {
           )}
         </div>
       </div>
+
+      <OrderConsumptions order={order} onUpdate={refreshOrder} />
     </div>
   );
 };

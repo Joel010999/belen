@@ -508,6 +508,7 @@ export const exportOrdersCSV = async () => {
       product: true,
       technicalSpec: true,
       colorOrders: { orderBy: { sequence: 'asc' } },
+      consumptions: { include: { supply: true } },
       machine: true,
       processes: {
         include: {
@@ -550,11 +551,13 @@ export const exportOrdersCSV = async () => {
     'Etapa Impresión - Metros',
     'Etapa Impresión - Scrap (Kg)',
     'Etapa Impresión - Lotes',
+    'Etapa Impresión - Consumos',
     'Etapa Laminación - Máquina',
     'Etapa Laminación - Operario',
     'Etapa Laminación - Metros',
     'Etapa Laminación - Scrap (Kg)',
     'Etapa Laminación - Lotes',
+    'Etapa Laminación - Consumos',
     'Etapa Refilado - Máquina',
     'Etapa Refilado - Operario',
     'Etapa Refilado - Metros',
@@ -573,6 +576,16 @@ export const exportOrdersCSV = async () => {
       if (!proc?.materialLots || proc.materialLots.length === 0) return '-';
       return proc.materialLots.map((l: any) => `Lote:${l.lotNumber} ${l.totalUsedMeters}m`).join(', ');
     };
+
+    const consumosImpresion = o.consumptions
+      ?.filter((c: any) => c.type === 'PRINTING')
+      ?.map((c: any) => `${c.supply?.name}: ${c.realQty}${c.unit} (${c.observations || ''})`)
+      .join(' | ') || '-';
+
+    const consumosLaminacion = o.consumptions
+      ?.filter((c: any) => c.type === 'LAMINATION')
+      ?.map((c: any) => `${c.supply?.name}: ${c.realQty}${c.unit} (${c.observations || ''})`)
+      .join(' | ') || '-';
 
     return [
       o.orderNumber,
@@ -601,11 +614,13 @@ export const exportOrdersCSV = async () => {
       impresion?.printingData?.processedMeters || '-',
       impresion?.scrapKg ?? '-',
       formatLots(impresion),
+      consumosImpresion,
       laminacion?.machine?.name || '-',
       laminacion?.operator ? `${laminacion.operator.firstName} ${laminacion.operator.lastName}` : '-',
       laminacion?.laminationData?.processedMeters || '-',
       laminacion?.scrapKg ?? '-',
       formatLots(laminacion),
+      consumosLaminacion,
       refilado?.machine?.name || '-',
       refilado?.operator ? `${refilado.operator.firstName} ${refilado.operator.lastName}` : '-',
       refilado?.refiladoData?.processedMeters || '-',
@@ -798,5 +813,129 @@ export const saveQualityControl = async (data: any) => {
       stage,
       data: JSON.stringify(controlData)
     }
+  });
+};
+
+export const registerConsumptions = async (orderId: number, data: any) => {
+  const { type, consumptions, realMeters } = data;
+  
+  return await prisma.$transaction(async (tx) => {
+    // 1. Save general consumptions and deduct stock
+    for (const cons of consumptions) {
+      if (!cons.supplyId) {
+        // Try to find supplyId by name if missing (common for colors)
+        if (cons.colorName) {
+          const supply = await tx.supply.findFirst({ where: { name: cons.colorName } });
+          if (supply) {
+            cons.supplyId = supply.id;
+          }
+        }
+      }
+
+      if (cons.supplyId) {
+        // Upsert Consumption record
+        const existingCons = await tx.consumption.findFirst({
+          where: { orderId, supplyId: cons.supplyId }
+        });
+
+        if (existingCons) {
+          await tx.consumption.update({
+            where: { id: existingCons.id },
+            data: {
+              realQty: (existingCons.realQty || 0) + parseFloat(cons.realQty),
+              observations: cons.loads ? `Cargas: ${cons.loads} | Sobrante: ${cons.endValue}` : undefined
+            }
+          });
+        } else {
+          await tx.consumption.create({
+            data: {
+              orderId,
+              supplyId: cons.supplyId,
+              plannedQty: cons.plannedQty ? parseFloat(cons.plannedQty) : 0,
+              realQty: parseFloat(cons.realQty),
+              unit: cons.unit || 'kg',
+              type: type,
+              observations: cons.loads ? `Cargas: ${cons.loads} | Sobrante: ${cons.endValue}` : undefined
+            }
+          });
+        }
+
+        // Deduct from Stock
+        const currentStock = await tx.currentStock.findUnique({
+          where: { supplyId: cons.supplyId }
+        });
+
+        if (currentStock) {
+          await tx.currentStock.update({
+            where: { id: currentStock.id },
+            data: {
+              stockActual: currentStock.stockActual - parseFloat(cons.realQty),
+              lastUpdate: new Date(),
+              updateSource: `Consumo Orden #${orderId}`
+            }
+          });
+
+          // Create StockMovement
+          await tx.stockMovement.create({
+            data: {
+              type: 'Consumo Producción',
+              source: `Orden #${orderId}`,
+              orderId,
+              itemType: 'supply',
+              supplyId: cons.supplyId,
+              qty: parseFloat(cons.realQty),
+              unit: cons.unit || 'kg',
+              sign: -1,
+              observations: `Consumo reportado por operarios de ${type}`,
+              pendingExport: true,
+              exported: false
+            }
+          });
+        }
+      } else {
+         // If still no supplyId, but it's a printing color, we update ProcessPrintingColor if possible
+         if (type === 'PRINTING' && cons.colorId) {
+            await tx.processPrintingColor.update({
+               where: { id: parseInt(cons.colorId) },
+               data: {
+                  endValue: cons.endValue ? parseFloat(cons.endValue) : null, // Assuming endValue here means "sobrante" or "fin" based on their terminology, but let's just save the text in observations
+                  diffValue: cons.endValue ? parseFloat(cons.endValue) : null,
+                  calcValue: parseFloat(cons.realQty)
+               }
+            });
+         }
+      }
+    }
+
+    // 2. Optionally update Real Meters in the Process
+    // If they send a processId or we find the active process for this order and type
+    if (realMeters) {
+        const process = await tx.productionProcess.findFirst({
+            where: { orderId, type: type === 'PRINTING' ? 'Impresión' : 'Laminación' },
+            orderBy: { id: 'desc' }
+        });
+        
+        if (process) {
+            if (type === 'PRINTING') {
+                const printData = await tx.processPrinting.findUnique({ where: { processId: process.id } });
+                if (printData) {
+                    await tx.processPrinting.update({
+                        where: { processId: process.id },
+                        data: { processedMeters: parseFloat(realMeters) }
+                    });
+                }
+            } else if (type === 'LAMINATION') {
+                const lamData = await tx.processLamination.findUnique({ where: { processId: process.id } });
+                if (lamData) {
+                    await tx.processLamination.update({
+                        where: { processId: process.id },
+                        data: { processedMeters: parseFloat(realMeters) }
+                    });
+                }
+            }
+        }
+    }
+
+    return { success: true, message: 'Consumos registrados y stock actualizado' };
   });
 };
