@@ -22,7 +22,8 @@ export const updateOrder = async (req: Request, res: Response) => {
 export const getAllOrders = async (req: Request, res: Response) => {
   try {
     const machineId = req.headers['x-machine-id'] ? parseInt(req.headers['x-machine-id'] as string) : undefined;
-    const orders = await orderService.getAllOrders(machineId);
+    const month = typeof req.query.month === 'string' ? req.query.month : undefined;
+    const orders = await orderService.getAllOrders(machineId, month);
     res.json(orders);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -87,7 +88,9 @@ export const deleteOrder = async (req: Request, res: Response) => {
 
 export const exportOrdersCSV = async (req: Request, res: Response) => {
   try {
-    const csv = await orderService.exportOrdersCSV();
+    const machineId = req.headers['x-machine-id'] ? parseInt(req.headers['x-machine-id'] as string) : undefined;
+    const month = typeof req.query.month === 'string' ? req.query.month : undefined;
+    const csv = await orderService.exportOrdersCSV(machineId, month);
     // Prepend UTF-8 BOM for Excel
     const bom = Buffer.from('\uFEFF', 'utf-8');
     const content = Buffer.concat([bom, Buffer.from(csv, 'utf-8')]);

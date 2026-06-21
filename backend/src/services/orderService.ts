@@ -162,8 +162,25 @@ export const createOrder = async (orderData: any) => {
   });
 };
 
-export const getAllOrders = async (machineId?: number) => {
+const buildMonthRange = (month?: string) => {
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) return null;
+
+  const [yearText, monthText] = month.split('-');
+  const year = parseInt(yearText, 10);
+  const monthIndex = parseInt(monthText, 10) - 1;
+
+  if (Number.isNaN(year) || Number.isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+    return null;
+  }
+
+  const start = new Date(year, monthIndex, 1);
+  const end = new Date(year, monthIndex + 1, 1);
+  return { start, end };
+};
+
+export const getAllOrders = async (machineId?: number, month?: string) => {
   const where: any = {};
+  const monthRange = buildMonthRange(month);
   
   if (machineId) {
     // If filtered by machine, show orders created ON that machine 
@@ -172,6 +189,13 @@ export const getAllOrders = async (machineId?: number) => {
       { machineId },
       { processes: { some: { machineId } } }
     ];
+  }
+
+  if (monthRange) {
+    where.createdAt = {
+      gte: monthRange.start,
+      lt: monthRange.end
+    };
   }
 
   return await prisma.productionOrder.findMany({
@@ -183,6 +207,7 @@ export const getAllOrders = async (machineId?: number) => {
       technicalSpec: true,
       colorOrders: true,
       machine: true,
+      processes: true,
       operators: {
         include: {
           operator: true
@@ -536,8 +561,26 @@ export const deleteOrder = async (id: number) => {
   });
 };
 
-export const exportOrdersCSV = async () => {
+export const exportOrdersCSV = async (machineId?: number, month?: string) => {
+  const where: any = {};
+  const monthRange = buildMonthRange(month);
+
+  if (machineId) {
+    where.OR = [
+      { machineId },
+      { processes: { some: { machineId } } }
+    ];
+  }
+
+  if (monthRange) {
+    where.createdAt = {
+      gte: monthRange.start,
+      lt: monthRange.end
+    };
+  }
+
   const orders = await prisma.productionOrder.findMany({
+    where,
     include: {
       client: true,
       product: true,
