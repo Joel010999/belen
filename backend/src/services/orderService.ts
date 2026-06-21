@@ -714,15 +714,14 @@ export const updateOrder = async (id: number, orderData: any) => {
   } = orderData;
 
   return await prisma.$transaction(async (tx) => {
-    const dataToUpdate: any = {
-        orderNumber,
-        clientId: parseInt(clientId),
-        productId: parseInt(productId),
-        plannedQty: plannedQty ? String(plannedQty) : null,
-        unit,
-        machineId: (machineIds && machineIds.length > 0) ? parseInt(machineIds[0]) : null,
-        operatorsText,
-    };
+    const dataToUpdate: any = {};
+    if (orderNumber !== undefined) dataToUpdate.orderNumber = orderNumber;
+    if (clientId !== undefined) dataToUpdate.clientId = parseInt(clientId);
+    if (productId !== undefined) dataToUpdate.productId = parseInt(productId);
+    if (plannedQty !== undefined) dataToUpdate.plannedQty = plannedQty ? String(plannedQty) : null;
+    if (unit !== undefined) dataToUpdate.unit = unit;
+    if (machineIds !== undefined) dataToUpdate.machineId = (machineIds && machineIds.length > 0) ? parseInt(machineIds[0]) : null;
+    if (operatorsText !== undefined) dataToUpdate.operatorsText = operatorsText;
     if (orderData.approvedPrinting !== undefined) dataToUpdate.approvedPrinting = orderData.approvedPrinting;
     if (orderData.approvedLamination !== undefined) dataToUpdate.approvedLamination = orderData.approvedLamination;
     if (orderData.approvedRefilado !== undefined) dataToUpdate.approvedRefilado = orderData.approvedRefilado;

@@ -123,7 +123,10 @@ export const getChecklists = async (req: Request, res: Response) => {
 
 export const saveChecklist = async (req: Request, res: Response) => {
   try {
-    const checklist = await orderService.saveChecklist(req.body);
+    const checklist = await orderService.saveChecklist({
+      ...req.body,
+      orderId: parseInt(req.params.orderId as string)
+    });
     res.status(201).json(checklist);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -141,7 +144,10 @@ export const getQualityControls = async (req: Request, res: Response) => {
 
 export const saveQualityControl = async (req: Request, res: Response) => {
   try {
-    const control = await orderService.saveQualityControl(req.body);
+    const control = await orderService.saveQualityControl({
+      ...req.body,
+      orderId: parseInt(req.params.orderId as string)
+    });
     res.status(201).json(control);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
