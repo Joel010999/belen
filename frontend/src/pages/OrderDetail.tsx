@@ -2,14 +2,25 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
-import { ClipboardList as Clipboard, Ruler, Layers, ArrowLeft, FileText, Cpu, Edit, ShieldCheck, CheckSquare, FlaskConical } from 'lucide-react';
+import {
+  ClipboardList as Clipboard,
+  Ruler,
+  Layers,
+  ArrowLeft,
+  FileText,
+  Cpu,
+  Edit,
+  ShieldCheck,
+  CheckSquare,
+  FlaskConical
+} from 'lucide-react';
 import { FormSection } from '../components/FormSection';
 import { OrderConsumptions } from '../components/OrderConsumptions';
 
 const STAGES = [
-  { value: 'IMPRESION', label: 'Impresion' },
-  { value: 'LAMINACION', label: 'Laminacion' },
-  { value: 'REFILADO', label: 'Refilado' }
+  { value: 'IMPRESION', label: 'Impresion', field: 'approvedPrinting' },
+  { value: 'LAMINACION', label: 'Laminacion', field: 'approvedLamination' },
+  { value: 'REFILADO', label: 'Refilado', field: 'approvedRefilado' }
 ];
 
 const DEFAULT_CHECKLIST_ITEMS = [
@@ -96,13 +107,13 @@ export const OrderDetail: React.FC = () => {
     }
   };
 
-  const openChecklistModal = () => {
-    loadChecklistStage(checklistStage);
+  const openChecklistModal = (stage: string) => {
+    loadChecklistStage(stage);
     setShowChecklistModal(true);
   };
 
-  const openQualityModal = () => {
-    loadQualityStage(qualityStage);
+  const openQualityModal = (stage: string) => {
+    loadQualityStage(stage);
     setShowQualityModal(true);
   };
 
@@ -242,44 +253,22 @@ export const OrderDetail: React.FC = () => {
           </FormSection>
 
           <FormSection title="Aprobaciones y Control" icon={<ShieldCheck size={24} />}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', gridColumn: 'span 2' }}>
-              <ApprovalCheck orderId={order.id} field="approvedPrinting" label="Impresion" initial={order.approvedPrinting} />
-              <ApprovalCheck orderId={order.id} field="approvedLamination" label="Laminacion" initial={order.approvedLamination} />
-              <ApprovalCheck orderId={order.id} field="approvedRefilado" label="Refilado" initial={order.approvedRefilado} />
+            <div style={{ gridColumn: 'span 2', marginBottom: '0.25rem' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                Cada etapa se completa por separado. Primero revisas la etapa, luego guardas checklist y control de calidad solo si hace falta.
+              </p>
             </div>
-            <div style={{ gridColumn: 'span 2', display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              <button
-                onClick={openChecklistModal}
-              className="btn"
-              style={{ flex: 1, padding: '0.9rem 1rem', border: '1px solid var(--primary)', color: 'var(--primary)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <CheckSquare size={18} />
-                <span>Checklist de Proceso</span>
-              </span>
-            </button>
-            <button
-              onClick={openQualityModal}
-              className="btn"
-              style={{ flex: 1, padding: '0.9rem 1rem', border: '1px solid var(--primary)', color: 'var(--primary)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <FlaskConical size={18} />
-                <span>Control de Calidad</span>
-              </span>
-            </button>
-            </div>
-            <div style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
-              <StatusInfo
-                title="Checklists guardados"
-                value={order.checklists?.length ? `${order.checklists.length} registro(s)` : 'Sin registros'}
-                detail={order.checklists?.length ? order.checklists.map((item: any) => getStageLabel(item.stage)).join(', ') : undefined}
-              />
-              <StatusInfo
-                title="Controles de calidad"
-                value={order.qualityControls?.length ? `${order.qualityControls.length} registro(s)` : 'Sin registros'}
-                detail={order.qualityControls?.length ? order.qualityControls.map((item: any) => getStageLabel(item.stage)).join(', ') : undefined}
-              />
+            <div style={{ gridColumn: 'span 2', display: 'grid', gap: '1rem' }}>
+              {STAGES.map((stage) => (
+                <StageCard
+                  key={stage.value}
+                  order={order}
+                  stage={stage}
+                  onOpenChecklist={() => openChecklistModal(stage.value)}
+                  onOpenQuality={() => openQualityModal(stage.value)}
+                  onRefresh={refreshOrder}
+                />
+              ))}
             </div>
           </FormSection>
         </div>
@@ -375,54 +364,32 @@ export const OrderDetail: React.FC = () => {
       <OrderConsumptions order={order} onUpdate={refreshOrder} />
 
       {showChecklistModal && (
-        <ModalShell title="Checklist de Proceso" onClose={() => setShowChecklistModal(false)}>
-          <div style={{ display: 'grid', gap: '1rem' }}>
-            <div>
-              <div>
-                <label className="label">Etapa</label>
-                <select className="input" value={checklistStage} onChange={(e) => loadChecklistStage(e.target.value)}>
-                  {STAGES.map((stage) => (
-                    <option key={stage.value} value={stage.value}>{stage.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gap: '0.75rem' }}>
-              {checklistItems.map((item, index) => (
-                <div key={`${item.controlName}-${index}`} className="card" style={{ padding: '1rem', backgroundColor: 'rgba(255,255,255,0.02)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.4fr auto', gap: '0.75rem', alignItems: 'center' }}>
-                    <input
-                      className="input"
-                      value={item.time}
-                      onChange={(e) => updateChecklistItem(setChecklistItems, checklistItems, index, 'time', e.target.value)}
-                      placeholder="Momento"
-                    />
-                    <input
-                      className="input"
-                      value={item.controlName}
-                      onChange={(e) => updateChecklistItem(setChecklistItems, checklistItems, index, 'controlName', e.target.value)}
-                      placeholder="Control"
-                    />
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={item.checked}
-                        onChange={(e) => updateChecklistItem(setChecklistItems, checklistItems, index, 'checked', e.target.checked)}
-                      />
-                      OK
-                    </label>
+        <ModalShell title={`Checklist de ${getStageLabel(checklistStage)}`} onClose={() => setShowChecklistModal(false)}>
+          <div style={{ display: 'grid', gap: '0.85rem' }}>
+            {checklistItems.map((item, index) => (
+              <div key={`${item.controlName}-${index}`} className="card" style={{ padding: '1rem', backgroundColor: 'rgba(255,255,255,0.02)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem' }}>
+                  <div>
+                    <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>{item.time}</p>
+                    <p style={{ fontSize: '1rem', fontWeight: 700 }}>{item.controlName}</p>
                   </div>
-                  <input
-                    className="input"
-                    style={{ marginTop: '0.75rem' }}
-                    value={item.value}
-                    onChange={(e) => updateChecklistItem(setChecklistItems, checklistItems, index, 'value', e.target.value)}
-                    placeholder="Observaciones o valor medido"
-                  />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}>
+                    <input
+                      type="checkbox"
+                      checked={item.checked}
+                      onChange={(e) => updateChecklistItem(setChecklistItems, checklistItems, index, 'checked', e.target.checked)}
+                    />
+                    De acuerdo
+                  </label>
                 </div>
-              ))}
-            </div>
+                <input
+                  className="input"
+                  value={item.value}
+                  onChange={(e) => updateChecklistItem(setChecklistItems, checklistItems, index, 'value', e.target.value)}
+                  placeholder="Observaciones opcionales"
+                />
+              </div>
+            ))}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
               <button className="btn" onClick={() => setShowChecklistModal(false)}>Cancelar</button>
@@ -435,24 +402,27 @@ export const OrderDetail: React.FC = () => {
       )}
 
       {showQualityModal && (
-        <ModalShell title="Control de Calidad" onClose={() => setShowQualityModal(false)}>
+        <ModalShell title={`Control de Calidad de ${getStageLabel(qualityStage)}`} onClose={() => setShowQualityModal(false)}>
           <div style={{ display: 'grid', gap: '1rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div>
-                <label className="label">Etapa</label>
-                <select className="input" value={qualityStage} onChange={(e) => loadQualityStage(e.target.value)}>
-                  {STAGES.map((stage) => (
-                    <option key={stage.value} value={stage.value}>{stage.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label">Resultado</label>
-                <select className="input" value={qualityStatus} onChange={(e) => setQualityStatus(e.target.value)}>
-                  <option value="APROBADO">Aprobado</option>
-                  <option value="OBSERVADO">Observado</option>
-                  <option value="RECHAZADO">Rechazado</option>
-                </select>
+            <div>
+              <label className="label">Resultado</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                {['APROBADO', 'OBSERVADO', 'RECHAZADO'].map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className="btn"
+                    onClick={() => setQualityStatus(option)}
+                    style={{
+                      padding: '0.9rem 1rem',
+                      border: qualityStatus === option ? '1px solid var(--primary)' : '1px solid var(--border)',
+                      backgroundColor: qualityStatus === option ? 'rgba(37, 99, 235, 0.18)' : 'rgba(255,255,255,0.02)',
+                      color: qualityStatus === option ? 'var(--text-main)' : 'var(--text-muted)'
+                    }}
+                  >
+                    {option}
+                  </button>
+                ))}
               </div>
             </div>
             <div>
@@ -485,14 +455,6 @@ const DataField = ({ label, value }: { label: string, value: string }) => (
   </div>
 );
 
-const StatusInfo = ({ title, value, detail }: { title: string, value: string, detail?: string }) => (
-  <div style={{ border: '1px solid var(--border)', borderRadius: '10px', padding: '0.9rem 1rem', backgroundColor: 'rgba(255,255,255,0.02)' }}>
-    <p style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>{title}</p>
-    <p style={{ fontSize: '0.95rem', fontWeight: 700, marginTop: '0.25rem' }}>{value}</p>
-    {detail && <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{detail}</p>}
-  </div>
-);
-
 const ModalShell = ({ title, children, onClose }: { title: string, children: React.ReactNode, onClose: () => void }) => (
   <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '1.5rem' }}>
     <div className="card" style={{ width: 'min(860px, 100%)', maxHeight: '85vh', overflowY: 'auto' }}>
@@ -505,19 +467,72 @@ const ModalShell = ({ title, children, onClose }: { title: string, children: Rea
   </div>
 );
 
-const ApprovalCheck = ({ orderId, field, label, initial }: any) => {
-  const [checked, setChecked] = useState(initial);
+const StageCard = ({
+  order,
+  stage,
+  onOpenChecklist,
+  onOpenQuality,
+  onRefresh
+}: {
+  order: any,
+  stage: { value: string; label: string; field: string };
+  onOpenChecklist: () => void;
+  onOpenQuality: () => void;
+  onRefresh: () => Promise<void>;
+}) => {
+  const approved = Boolean(order?.[stage.field]);
+  const checklistSaved = order?.checklists?.some((item: any) => item.stage === stage.value);
+  const qualitySaved = order?.qualityControls?.some((item: any) => item.stage === stage.value);
+
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: '14px', padding: '1rem 1.1rem', backgroundColor: 'rgba(255,255,255,0.02)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '0.85rem' }}>
+        <div>
+          <h4 style={{ fontSize: '1rem', fontWeight: 800 }}>{stage.label}</h4>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.15rem' }}>
+            Marca la etapa como aprobada y carga solo lo necesario.
+          </p>
+        </div>
+        <ApprovalToggle orderId={order.id} field={stage.field} checked={approved} />
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
+        <MiniStatus label="Aprobacion" ok={approved} />
+        <MiniStatus label="Checklist" ok={checklistSaved} />
+        <MiniStatus label="Calidad" ok={qualitySaved} />
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <button className="btn" onClick={onOpenChecklist} style={{ border: '1px solid var(--border)', color: 'var(--text-main)', backgroundColor: 'rgba(255,255,255,0.03)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <CheckSquare size={16} />
+            <span>{checklistSaved ? 'Editar checklist' : 'Cargar checklist'}</span>
+          </span>
+        </button>
+        <button className="btn" onClick={onOpenQuality} style={{ border: '1px solid var(--border)', color: 'var(--text-main)', backgroundColor: 'rgba(255,255,255,0.03)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <FlaskConical size={16} />
+            <span>{qualitySaved ? 'Editar calidad' : 'Cargar calidad'}</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const ApprovalToggle = ({ orderId, field, checked }: { orderId: number; field: string; checked: boolean }) => {
   const [loading, setLoading] = useState(false);
+  const [value, setValue] = useState(checked);
 
   useEffect(() => {
-    setChecked(initial);
-  }, [initial]);
+    setValue(checked);
+  }, [checked]);
 
   const toggle = async () => {
     setLoading(true);
     try {
-      await api.put(`/orders/${orderId}`, { [field]: !checked });
-      setChecked(!checked);
+      await api.put(`/orders/${orderId}`, { [field]: !value });
+      setValue(!value);
     } catch (e) {
       console.error(e);
       alert('No se pudo guardar la aprobacion');
@@ -527,12 +542,42 @@ const ApprovalCheck = ({ orderId, field, label, initial }: any) => {
   };
 
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', opacity: loading ? 0.5 : 1 }}>
-      <input type="checkbox" checked={checked} onChange={toggle} disabled={loading} style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }} />
-      <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>{label}</span>
-    </label>
+    <button
+      type="button"
+      className="btn"
+      onClick={toggle}
+      disabled={loading}
+      style={{
+        minWidth: '150px',
+        border: value ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid var(--border)',
+        backgroundColor: value ? 'rgba(34, 197, 94, 0.16)' : 'rgba(255,255,255,0.03)',
+        color: value ? '#86efac' : 'var(--text-main)'
+      }}
+    >
+      <span>{loading ? 'Guardando...' : value ? 'Etapa aprobada' : 'Marcar aprobada'}</span>
+    </button>
   );
 };
+
+const MiniStatus = ({ label, ok }: { label: string; ok: boolean }) => (
+  <span
+    style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '0.45rem',
+      padding: '0.35rem 0.7rem',
+      borderRadius: '999px',
+      border: '1px solid var(--border)',
+      backgroundColor: ok ? 'rgba(34, 197, 94, 0.12)' : 'rgba(255,255,255,0.03)',
+      color: ok ? '#86efac' : 'var(--text-muted)',
+      fontSize: '0.78rem',
+      fontWeight: 700
+    }}
+  >
+    <span style={{ width: '8px', height: '8px', borderRadius: '999px', backgroundColor: ok ? '#22c55e' : '#64748b' }} />
+    {label}
+  </span>
+);
 
 const updateChecklistItem = (
   setChecklistItems: React.Dispatch<React.SetStateAction<any[]>>,

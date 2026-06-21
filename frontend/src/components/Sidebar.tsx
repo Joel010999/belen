@@ -22,7 +22,6 @@ const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['ADMIN', 'MACHINE'] },
   { icon: ClipboardList, label: 'Órdenes de Producción', path: '/ordenes', roles: ['ADMIN', 'MACHINE'] },
   { icon: History, label: 'Histórico de Órdenes', path: '/historial', roles: ['ADMIN', 'MACHINE'] },
-  { icon: ShieldCheck, label: 'Control Final', path: '/control', roles: ['ADMIN', 'MACHINE'] },
   { icon: Package, label: 'Stock Operativo', path: '/stock', roles: ['ADMIN'] },
   { divider: true, roles: ['ADMIN'] },
   { icon: FileUp, label: 'Importación / Exportación', path: '/transferencia', roles: ['ADMIN'] },
