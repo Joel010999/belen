@@ -269,7 +269,14 @@ export const OrderForm: React.FC = () => {
             boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)'
           }}
         >
-          {loading ? 'GUARDANDO...' : <><Save size={20} /> GUARDAR ORDEN</>}
+          {loading ? (
+            <span>GUARDANDO...</span>
+          ) : (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Save size={20} />
+              <span>GUARDAR ORDEN</span>
+            </span>
+          )}
         </button>
       </div>
 
