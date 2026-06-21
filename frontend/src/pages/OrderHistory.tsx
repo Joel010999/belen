@@ -83,7 +83,7 @@ export const OrderHistory: React.FC = () => {
           <button
             onClick={handleExport}
             className="btn-secondary"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            style={{ minWidth: '220px' }}
           >
             <Download size={20} />
             Exportar Resultados
