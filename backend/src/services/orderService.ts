@@ -832,9 +832,36 @@ export const getChecklists = async (orderId: number) => {
 
 export const saveChecklist = async (data: any) => {
   const { orderId, stage, operatorId, items } = data;
+  const parsedOrderId = parseInt(orderId);
+  let finalOperatorId = operatorId ? parseInt(operatorId) : null;
+
+  if (!finalOperatorId) {
+    const existingOrderOperator = await prisma.orderOperator.findFirst({
+      where: { orderId: parsedOrderId },
+      orderBy: { id: 'asc' }
+    });
+
+    if (existingOrderOperator?.operatorId) {
+      finalOperatorId = existingOrderOperator.operatorId;
+    }
+  }
+
+  if (!finalOperatorId) {
+    const fallbackOperator = await prisma.operator.findFirst({
+      orderBy: { id: 'asc' }
+    });
+
+    if (fallbackOperator?.id) {
+      finalOperatorId = fallbackOperator.id;
+    }
+  }
+
+  if (!finalOperatorId) {
+    throw new Error('No hay un operador disponible para asociar al checklist');
+  }
 
   const existing = await prisma.processChecklist.findFirst({
-    where: { orderId: parseInt(orderId), stage }
+    where: { orderId: parsedOrderId, stage }
   });
 
   if (existing) {
@@ -844,9 +871,9 @@ export const saveChecklist = async (data: any) => {
 
   return await prisma.processChecklist.create({
     data: {
-      orderId: parseInt(orderId),
+      orderId: parsedOrderId,
       stage,
-      operatorId: parseInt(operatorId),
+      operatorId: finalOperatorId,
       items: {
         create: items.map((item: any) => ({
           time: item.time,

@@ -28,7 +28,6 @@ export const OrderDetail: React.FC = () => {
   const [showChecklistModal, setShowChecklistModal] = useState(false);
   const [showQualityModal, setShowQualityModal] = useState(false);
   const [checklistStage, setChecklistStage] = useState('IMPRESION');
-  const [checklistOperatorId, setChecklistOperatorId] = useState('');
   const [checklistItems, setChecklistItems] = useState(DEFAULT_CHECKLIST_ITEMS);
   const [qualityStage, setQualityStage] = useState('IMPRESION');
   const [qualityStatus, setQualityStatus] = useState('APROBADO');
@@ -60,16 +59,10 @@ export const OrderDetail: React.FC = () => {
     }
   };
 
-  const availableOperators = order?.operators?.map((op: any) => ({
-    id: String(op.operatorId ?? op.operator?.id),
-    name: `${op.operator?.firstName || ''} ${op.operator?.lastName || ''}`.trim()
-  })) || [];
-
   const loadChecklistStage = (stage: string) => {
     setChecklistStage(stage);
     const existingChecklist = order?.checklists?.find((item: any) => item.stage === stage);
     if (existingChecklist) {
-      setChecklistOperatorId(String(existingChecklist.operatorId));
       setChecklistItems(
         existingChecklist.items.map((item: any) => ({
           time: item.time || '',
@@ -81,7 +74,6 @@ export const OrderDetail: React.FC = () => {
       return;
     }
 
-    setChecklistOperatorId(availableOperators[0]?.id || '');
     setChecklistItems(DEFAULT_CHECKLIST_ITEMS.map((item) => ({ ...item })));
   };
 
@@ -125,16 +117,10 @@ export const OrderDetail: React.FC = () => {
   };
 
   const saveChecklist = async () => {
-    if (!checklistOperatorId) {
-      alert('Seleccione un operador para guardar el checklist.');
-      return;
-    }
-
     setSavingChecklist(true);
     try {
       await api.post(`/orders/${order.id}/checklists`, {
         stage: checklistStage,
-        operatorId: checklistOperatorId,
         items: checklistItems
       });
       await refreshOrder();
@@ -391,21 +377,12 @@ export const OrderDetail: React.FC = () => {
       {showChecklistModal && (
         <ModalShell title="Checklist de Proceso" onClose={() => setShowChecklistModal(false)}>
           <div style={{ display: 'grid', gap: '1rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div>
               <div>
                 <label className="label">Etapa</label>
                 <select className="input" value={checklistStage} onChange={(e) => loadChecklistStage(e.target.value)}>
                   {STAGES.map((stage) => (
                     <option key={stage.value} value={stage.value}>{stage.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label">Operador</label>
-                <select className="input" value={checklistOperatorId} onChange={(e) => setChecklistOperatorId(e.target.value)}>
-                  <option value="">Seleccione...</option>
-                  {availableOperators.map((operator: any) => (
-                    <option key={operator.id} value={operator.id}>{operator.name}</option>
                   ))}
                 </select>
               </div>
