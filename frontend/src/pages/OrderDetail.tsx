@@ -192,7 +192,10 @@ export const OrderDetail: React.FC = () => {
                 backgroundColor: '#10b981', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '8px'
               }}
             >
-              <ShieldCheck size={20} /> FINALIZAR ORDEN
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <ShieldCheck size={20} />
+                <span>FINALIZAR ORDEN</span>
+              </span>
             </button>
           )}
           {user?.role === 'ADMIN' && (
@@ -206,7 +209,10 @@ export const OrderDetail: React.FC = () => {
                 boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)'
               }}
             >
-              <Edit size={20} /> EDITAR ORDEN
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <Edit size={20} />
+                <span>EDITAR ORDEN</span>
+              </span>
             </Link>
           )}
         </div>
@@ -258,20 +264,24 @@ export const OrderDetail: React.FC = () => {
             <div style={{ gridColumn: 'span 2', display: 'flex', gap: '1rem', marginTop: '1rem' }}>
               <button
                 onClick={openChecklistModal}
-                className="btn"
-                style={{ flex: 1, padding: '0.9rem 1rem', border: '1px solid var(--primary)', color: 'var(--primary)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}
-              >
+              className="btn"
+              style={{ flex: 1, padding: '0.9rem 1rem', border: '1px solid var(--primary)', color: 'var(--primary)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <CheckSquare size={18} />
-                Checklist de Proceso
-              </button>
-              <button
-                onClick={openQualityModal}
-                className="btn"
-                style={{ flex: 1, padding: '0.9rem 1rem', border: '1px solid var(--primary)', color: 'var(--primary)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}
-              >
+                <span>Checklist de Proceso</span>
+              </span>
+            </button>
+            <button
+              onClick={openQualityModal}
+              className="btn"
+              style={{ flex: 1, padding: '0.9rem 1rem', border: '1px solid var(--primary)', color: 'var(--primary)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <FlaskConical size={18} />
-                Control de Calidad
-              </button>
+                <span>Control de Calidad</span>
+              </span>
+            </button>
             </div>
             <div style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
               <StatusInfo
@@ -440,7 +450,7 @@ export const OrderDetail: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
               <button className="btn" onClick={() => setShowChecklistModal(false)}>Cancelar</button>
               <button className="btn btn-primary" onClick={saveChecklist} disabled={savingChecklist}>
-                {savingChecklist ? 'Guardando...' : 'Guardar Checklist'}
+                <span>{savingChecklist ? 'Guardando...' : 'Guardar Checklist'}</span>
               </button>
             </div>
           </div>
@@ -481,7 +491,7 @@ export const OrderDetail: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
               <button className="btn" onClick={() => setShowQualityModal(false)}>Cancelar</button>
               <button className="btn btn-primary" onClick={saveQualityControl} disabled={savingQuality}>
-                {savingQuality ? 'Guardando...' : 'Guardar Control'}
+                <span>{savingQuality ? 'Guardando...' : 'Guardar Control'}</span>
               </button>
             </div>
           </div>
