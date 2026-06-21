@@ -6,6 +6,7 @@ const router = Router();
 router.post('/', orderController.createOrder);
 router.get('/export-csv', orderController.exportOrdersCSV);
 router.get('/stats', orderController.getDashboardStats);
+router.get('/stats/costs', orderController.getCostStats);
 router.get('/', orderController.getAllOrders);
 router.get('/:id', orderController.getOrderById);
 router.post('/processes', orderController.createProcess);

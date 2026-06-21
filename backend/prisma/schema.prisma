@@ -440,3 +440,12 @@ model QualityControl {
   order       ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
+model SystemAuditLog {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @default(now())
+  userId    Int?
+  userStr   String?  // Name or role if userId is not directly known
+  action    String   // e.g. "CREATE", "UPDATE", "DELETE", "LOGIN"
+  entity    String   // e.g. "ProductionOrder", "User", "CurrentStock"
+  details   String?  @db.Text // JSON string or descriptive text with payload/changes
+}

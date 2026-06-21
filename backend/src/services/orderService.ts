@@ -441,6 +441,41 @@ export const getDashboardStats = async (machineId?: number) => {
 
 
 
+export const getCostStats = async () => {
+  const orders = await prisma.productionOrder.findMany({
+    where: { 
+      consumptions: { some: {} } 
+    },
+    include: {
+      consumptions: { include: { supply: true } }
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 50
+  });
+
+  const stats = orders.map(o => {
+    let plannedKg = 0;
+    let realKg = 0;
+    
+    o.consumptions.forEach(c => {
+      plannedKg += c.plannedQty || 0;
+      realKg += c.realQty || 0;
+    });
+
+    return {
+      orderNumber: o.orderNumber,
+      status: o.status,
+      date: o.date,
+      plannedKg,
+      realKg,
+      difference: realKg - plannedKg,
+      differencePercent: plannedKg > 0 ? ((realKg - plannedKg) / plannedKg) * 100 : 0
+    };
+  });
+
+  return stats;
+};
+
 export const finalizeOrder = async (id: number) => {
   return await prisma.$transaction(async (tx) => {
     const order = await tx.productionOrder.findUnique({
@@ -453,7 +488,7 @@ export const finalizeOrder = async (id: number) => {
     // Update order status
     const updatedOrder = await tx.productionOrder.update({
       where: { id },
-      data: { status: 'Finalizadas' }
+      data: { status: 'Finalizadas', closedAt: new Date() }
     });
 
     // Calculate total produced (could be plannedQty or based on last stage)

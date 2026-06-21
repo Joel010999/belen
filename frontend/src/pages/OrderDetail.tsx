@@ -35,6 +35,16 @@ export const OrderDetail: React.FC = () => {
     }
   };
 
+  const handleFinalize = async () => {
+    if (!window.confirm('¿Está seguro de finalizar y cerrar esta orden? Esta acción sumará el stock final al inventario y registrará la fecha de cierre.')) return;
+    try {
+      await api.post(`/orders/${order.id}/finalize`);
+      refreshOrder();
+    } catch (e: any) {
+      alert(e.response?.data?.error || 'Error al finalizar orden');
+    }
+  };
+
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center' }}>Cargando orden...</div>;
   if (!order) return <div style={{ padding: '3rem', textAlign: 'center' }}>Orden no encontrada.</div>;
 
@@ -51,20 +61,35 @@ export const OrderDetail: React.FC = () => {
             </div>
           </div>
         </div>
-        {user?.role === 'ADMIN' && (
-          <Link 
-            to={`/ordenes/editar/${order.id}`} 
-            className="btn btn-primary" 
-            style={{ 
-              display: 'flex', alignItems: 'center', gap: '0.75rem', 
-              padding: '1rem 2rem', fontSize: '1rem', fontWeight: 700,
-              textDecoration: 'none',
-              boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)'
-            }}
-          >
-            <Edit size={20} /> EDITAR ORDEN
-          </Link>
-        )}
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          {order.status !== 'Finalizadas' && (
+             <button 
+                onClick={handleFinalize}
+                className="btn" 
+                style={{ 
+                  display: 'flex', alignItems: 'center', gap: '0.75rem', 
+                  padding: '1rem 2rem', fontSize: '1rem', fontWeight: 700,
+                  backgroundColor: '#10b981', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '8px'
+                }}
+             >
+                <ShieldCheck size={20} /> FINALIZAR ORDEN
+             </button>
+          )}
+          {user?.role === 'ADMIN' && (
+            <Link 
+              to={`/ordenes/editar/${order.id}`} 
+              className="btn btn-primary" 
+              style={{ 
+                display: 'flex', alignItems: 'center', gap: '0.75rem', 
+                padding: '1rem 2rem', fontSize: '1rem', fontWeight: 700,
+                textDecoration: 'none',
+                boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)'
+              }}
+            >
+              <Edit size={20} /> EDITAR ORDEN
+            </Link>
+          )}
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem' }}>

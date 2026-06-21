@@ -18,10 +18,8 @@ export const importClients = async (filePath: string, userId: number) => {
       .on('data', (data) => results.push(data))
       .on('end', async () => {
         read = results.length;
-        
-        // Reemplazo completo: borrar todos los clientes existentes
-        await prisma.client.deleteMany({});
-        
+        // Remove destructive deleteMany
+        // await prisma.client.deleteMany({});
         for (const row of results) {
           try {
             const code = row.code?.trim();
@@ -79,10 +77,10 @@ export const importProducts = async (filePath: string, userId: number) => {
       .on('end', async () => {
         read = results.length;
 
-        // Reemplazo completo: borrar stock, productos e insumos existentes
-        await prisma.currentStock.deleteMany({});
-        await prisma.product.deleteMany({});
-        await prisma.supply.deleteMany({});
+        // Remove destructive deleteMany
+        // await prisma.currentStock.deleteMany({});
+        // await prisma.product.deleteMany({});
+        // await prisma.supply.deleteMany({});
 
         for (const row of results) {
           try {
@@ -172,8 +170,9 @@ export const importStock = async (filePath: string, userId: number) => {
       .on('end', async () => {
         read = results.length;
 
-        // Reemplazo completo: borrar todo el stock existente
-        await prisma.currentStock.deleteMany({});
+        // En lugar de borrar todo el stock (que rompe referencias o causa ineficiencia), lo reseteamos a 0.
+        // Así los ítems que ya no vienen en el Excel quedarán en 0.
+        await prisma.currentStock.updateMany({ data: { stockActual: 0 } });
 
         for (const row of results) {
           try {

@@ -8,7 +8,7 @@ export const OrdersList: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [machines, setMachines] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterStatus, setFilterStatus] = useState('ACTIVE');
   const [filterMachine, setFilterMachine] = useState('ALL');
   const [filterDate, setFilterDate] = useState('');
   const [loading, setLoading] = useState(true);
@@ -69,7 +69,12 @@ export const OrdersList: React.FC = () => {
       order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.client?.name.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = filterStatus === 'ALL' || order.status === filterStatus;
+    // Si el filtro es ACTIVE, excluir finalizadas. Si es FINALIZADA, mostrar solo esas (por si acaso).
+    const matchesStatus = filterStatus === 'ALL' 
+        ? true 
+        : filterStatus === 'ACTIVE' 
+            ? order.status !== 'Finalizadas' 
+            : order.status === filterStatus;
     
     const matchesDate = !filterDate || new Date(order.createdAt).toLocaleDateString() === new Date(filterDate).toLocaleDateString();
     
@@ -125,9 +130,10 @@ export const OrdersList: React.FC = () => {
             />
           </div>
           <select className="input" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-            <option value="ALL">Todos los estados</option>
+            <option value="ALL">Histórico Completo (Incluir Finalizadas)</option>
+            <option value="ACTIVE">En Curso (Ocultar Finalizadas)</option>
             <option value="EN_PROCESO">En Proceso</option>
-            <option value="FINALIZADA">Finalizada</option>
+            <option value="Finalizadas">Finalizadas</option>
           </select>
           <select className="input" value={filterMachine} onChange={(e) => setFilterMachine(e.target.value)}>
             <option value="ALL">Todas las máquinas</option>

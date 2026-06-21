@@ -50,6 +50,51 @@ app.put('/api/stock/config', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+app.get('/api/audit', async (req, res) => {
+  try {
+    const logs = await prisma.systemAuditLog.findMany({
+      orderBy: { date: 'desc' },
+      take: 1000 // limit to last 1000 for performance
+    });
+    res.json(logs);
+  } catch(e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/audit/export', async (req, res) => {
+  try {
+    const logs = await prisma.systemAuditLog.findMany({
+      orderBy: { date: 'desc' }
+    });
+    
+    const header = 'Fecha;Accion;Entidad;Usuario ID;Detalles\n';
+    const rows = logs.map(l => {
+      const dateStr = l.date.toISOString();
+      const detailsStr = l.details ? String(l.details).replace(/;/g, ',').replace(/\n/g, ' ') : '';
+      return `${dateStr};${l.action};${l.entity};${l.userId || l.userStr || 'Sistema'};${detailsStr}`;
+    }).join('\n');
+    
+    const bom = Buffer.from('\uFEFF', 'utf-8');
+    const content = Buffer.concat([bom, Buffer.from(header + rows, 'utf-8')]);
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=auditoria_silcar.csv');
+    res.send(content);
+  } catch(e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/audit', async (req, res) => {
+  try {
+    await prisma.systemAuditLog.deleteMany({});
+    res.json({ message: 'Historial de auditoría vaciado' });
+  } catch(e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.listen(port, () => {
   console.log(`Silcar Backend running on port ${port}`);
 });

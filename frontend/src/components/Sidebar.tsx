@@ -11,7 +11,8 @@ import {
   Settings, 
   Users, 
   UserSquare2,
-  X
+  X,
+  History
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -20,10 +21,13 @@ import styles from './Sidebar.module.css';
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['ADMIN', 'MACHINE'] },
   { icon: ClipboardList, label: 'Órdenes de Producción', path: '/ordenes', roles: ['ADMIN', 'MACHINE'] },
+  { icon: History, label: 'Histórico de Órdenes', path: '/historial', roles: ['ADMIN', 'MACHINE'] },
   { icon: ShieldCheck, label: 'Control Final', path: '/control', roles: ['ADMIN', 'MACHINE'] },
   { icon: Package, label: 'Stock Operativo', path: '/stock', roles: ['ADMIN'] },
   { divider: true, roles: ['ADMIN'] },
   { icon: FileUp, label: 'Importación / Exportación', path: '/transferencia', roles: ['ADMIN'] },
+  { icon: ShieldCheck, label: 'Auditoría del Sistema', path: '/auditoria', roles: ['ADMIN'] },
+  { icon: LayoutDashboard, label: 'Rentabilidad y Costos', path: '/costos', roles: ['ADMIN'] },
 ];
 
 interface SidebarProps {

@@ -58,6 +58,15 @@ export const getDashboardStats = async (req: Request, res: Response) => {
   }
 };
 
+export const getCostStats = async (req: Request, res: Response) => {
+  try {
+    const stats = await orderService.getCostStats();
+    res.json(stats);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export const finalizeOrder = async (req: Request, res: Response) => {
   try {
     const order = await orderService.finalizeOrder(parseInt(req.params.id as string));

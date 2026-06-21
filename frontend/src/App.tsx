@@ -11,6 +11,9 @@ import { StockView } from './pages/StockView';
 import { MachinesView } from './pages/MachinesView';
 import { OperatorsView } from './pages/OperatorsView';
 import { LoginPage } from './pages/LoginPage';
+import { AuditLogs } from './pages/AuditLogs';
+import { CostDashboard } from './pages/CostDashboard';
+import { OrderHistory } from './pages/OrderHistory';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
@@ -47,6 +50,9 @@ const AppContent = () => {
             <Route path="/control" element={<QualityControl />} />
             <Route path="/stock" element={<StockView />} />
             <Route path="/transferencia" element={<ImportCSV />} />
+            <Route path="/auditoria" element={<AuditLogs />} />
+            <Route path="/costos" element={<CostDashboard />} />
+            <Route path="/historial" element={<OrderHistory />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </ErrorBoundary>

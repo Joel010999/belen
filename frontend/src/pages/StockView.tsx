@@ -135,7 +135,11 @@ export const StockView: React.FC = () => {
                         {filteredItems.map(item => {
                             const isLow = item.stockLevel < (item.minStock || 100);
                             return (
-                                <tr key={`${item.category}-${item.id}`} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }}>
+                                <tr key={`${item.category}-${item.id}`} style={{ 
+                                    borderBottom: '1px solid var(--border)', 
+                                    transition: 'background 0.2s',
+                                    backgroundColor: isLow ? 'rgba(239, 68, 68, 0.15)' : 'transparent'
+                                }}>
                                     <td data-label="Artículo" style={{ padding: '1.25rem 1.5rem' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                                             <p style={{ fontWeight: 800, margin: 0 }}>{item.code}</p>

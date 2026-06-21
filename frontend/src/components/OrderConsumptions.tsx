@@ -1,5 +1,5 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Droplet, Layers, Save, CheckCircle2 } from 'lucide-react';
+import { Droplet, Layers, Save, CheckCircle2, Plus, Trash2 } from 'lucide-react';
 import api from '../services/api';
 
 export interface ConsumptionsRef {
@@ -20,6 +20,11 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
   const [realMeters, setRealMeters] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [supplies, setSupplies] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.get('/supplies').then(res => setSupplies(res.data)).catch(console.error);
+  }, []);
 
   useEffect(() => {
     if (order?.colorOrders) {
@@ -75,6 +80,22 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
     updated[index].realQty = Math.max(0, totalLoads - sobrante);
     
     setLaminationSupplies(updated);
+  };
+
+  const removeRow = (index: number) => {
+    if (activeTab === 'PRINTING') {
+      setPrintingColors(prev => prev.filter((_, i) => i !== index));
+    } else {
+      setLaminationSupplies(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  const addRow = () => {
+    if (activeTab === 'PRINTING') {
+      setPrintingColors(prev => [...prev, { colorName: '', supplyId: null, loads: '', endValue: '', realQty: 0 }]);
+    } else {
+      setLaminationSupplies(prev => [...prev, { name: '', supplyId: null, loads: '', endValue: '', realQty: 0 }]);
+    }
   };
 
   const getConsumptionsData = () => {
@@ -173,12 +194,42 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
               <th style={{ padding: '0.75rem' }}>Cargas (ej. 25+20)</th>
               <th style={{ padding: '0.75rem' }}>Diferencia / Fin</th>
               <th style={{ padding: '0.75rem', textAlign: 'right' }}>Consumo Real</th>
+              <th style={{ padding: '0.75rem', width: '50px' }}></th>
             </tr>
           </thead>
           <tbody>
             {(activeTab === 'PRINTING' ? printingColors : laminationSupplies).map((item, idx) => (
               <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background-color 0.2s' }}>
-                <td style={{ padding: '0.75rem', fontWeight: 600 }}>{item.colorName || item.name}</td>
+                <td style={{ padding: '0.75rem' }}>
+                  <select 
+                    value={item.supplyId || ''} 
+                    onChange={(e) => {
+                      const sId = e.target.value ? parseInt(e.target.value) : null;
+                      const s = supplies.find(x => x.id === sId);
+                      if (activeTab === 'PRINTING') {
+                        const updated = [...printingColors];
+                        updated[idx].supplyId = sId;
+                        updated[idx].colorName = s ? s.name : '';
+                        setPrintingColors(updated);
+                      } else {
+                        const updated = [...laminationSupplies];
+                        updated[idx].supplyId = sId;
+                        updated[idx].name = s ? s.name : '';
+                        setLaminationSupplies(updated);
+                      }
+                    }}
+                    className="input-field"
+                    style={{ width: '100%', minWidth: '150px', padding: '0.6rem', fontSize: '0.9rem', backgroundColor: 'rgba(0,0,0,0.2)' }}
+                  >
+                    <option value="">Seleccione insumo...</option>
+                    {(!item.supplyId && (item.colorName || item.name)) && (
+                      <option value="">{item.colorName || item.name} (Seleccione insumo real)</option>
+                    )}
+                    {supplies.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} {s.code ? `(${s.code})` : ''}</option>
+                    ))}
+                  </select>
+                </td>
                 <td style={{ padding: '0.75rem' }}>
                   <input 
                     type="text" 
@@ -202,10 +253,29 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
                 <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 800, color: 'var(--primary)', fontSize: '1.2rem' }}>
                   {item.realQty} <span style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>kg</span>
                 </td>
+                <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                  <button 
+                    onClick={() => removeRow(idx)}
+                    title="Eliminar fila"
+                    style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', opacity: 0.7, padding: '0.2rem' }}
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div style={{ marginBottom: '1.5rem' }}>
+        <button 
+          onClick={addRow}
+          className="btn" 
+          style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(37, 99, 235, 0.1)', padding: '0.5rem 1rem' }}
+        >
+          <Plus size={16} /> Añadir Insumo Extra
+        </button>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1.5rem', backgroundColor: 'rgba(0,0,0,0.3)', padding: '1.2rem', borderRadius: '12px' }}>
