@@ -8,6 +8,8 @@ api.interceptors.request.use((config) => {
   const savedUser = localStorage.getItem('silcar_user');
   if (savedUser) {
     const user = JSON.parse(savedUser);
+    config.headers['x-user-id'] = user.id;
+    config.headers['x-user-role'] = user.role;
     if (user.machine?.id) {
       config.headers['x-machine-id'] = user.machine.id;
     }

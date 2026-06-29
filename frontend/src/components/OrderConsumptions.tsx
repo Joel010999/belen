@@ -11,10 +11,11 @@ interface ConsumptionsProps {
   order: any;
   onUpdate?: () => void;
   standalone?: boolean;
+  lockedTab?: 'PRINTING' | 'LAMINATION';
 }
 
-export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(({ order, onUpdate, standalone = true }, ref) => {
-  const [activeTab, setActiveTab] = useState<'PRINTING' | 'LAMINATION'>('PRINTING');
+export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(({ order, onUpdate, standalone = true, lockedTab }, ref) => {
+  const [activeTab, setActiveTab] = useState<'PRINTING' | 'LAMINATION'>(lockedTab || 'PRINTING');
   const [printingColors, setPrintingColors] = useState<any[]>([]);
   const [laminationSupplies, setLaminationSupplies] = useState<any[]>([]);
   const [realMeters, setRealMeters] = useState<string>('');
@@ -25,6 +26,12 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
   useEffect(() => {
     api.get('/supplies').then(res => setSupplies(res.data)).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (lockedTab) {
+      setActiveTab(lockedTab);
+    }
+  }, [lockedTab]);
 
   useEffect(() => {
     if (order?.colorOrders) {
@@ -161,24 +168,28 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
       
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
         <button 
-          onClick={() => setActiveTab('PRINTING')}
+          onClick={() => !lockedTab && setActiveTab('PRINTING')}
+          disabled={Boolean(lockedTab)}
           style={{ 
             background: 'none', border: 'none', color: activeTab === 'PRINTING' ? 'var(--primary)' : 'var(--text-muted)',
-            fontWeight: activeTab === 'PRINTING' ? 800 : 500, fontSize: '1rem', cursor: 'pointer', padding: '0.5rem 1rem',
+            fontWeight: activeTab === 'PRINTING' ? 800 : 500, fontSize: '1rem', cursor: lockedTab ? 'default' : 'pointer', padding: '0.5rem 1rem',
             borderBottom: activeTab === 'PRINTING' ? '2px solid var(--primary)' : '2px solid transparent',
-            transition: 'all 0.2s ease'
+            transition: 'all 0.2s ease',
+            opacity: lockedTab && activeTab !== 'PRINTING' ? 0.5 : 1
           }}
         >
           <Droplet size={16} style={{ display: 'inline', marginRight: '0.5rem' }}/>
           Impresión
         </button>
         <button 
-          onClick={() => setActiveTab('LAMINATION')}
+          onClick={() => !lockedTab && setActiveTab('LAMINATION')}
+          disabled={Boolean(lockedTab)}
           style={{ 
             background: 'none', border: 'none', color: activeTab === 'LAMINATION' ? 'var(--primary)' : 'var(--text-muted)',
-            fontWeight: activeTab === 'LAMINATION' ? 800 : 500, fontSize: '1rem', cursor: 'pointer', padding: '0.5rem 1rem',
+            fontWeight: activeTab === 'LAMINATION' ? 800 : 500, fontSize: '1rem', cursor: lockedTab ? 'default' : 'pointer', padding: '0.5rem 1rem',
             borderBottom: activeTab === 'LAMINATION' ? '2px solid var(--primary)' : '2px solid transparent',
-            transition: 'all 0.2s ease'
+            transition: 'all 0.2s ease',
+            opacity: lockedTab && activeTab !== 'LAMINATION' ? 0.5 : 1
           }}
         >
           <Layers size={16} style={{ display: 'inline', marginRight: '0.5rem' }}/>

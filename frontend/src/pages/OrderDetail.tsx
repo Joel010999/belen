@@ -45,6 +45,17 @@ export const OrderDetail: React.FC = () => {
   const [qualityObservations, setQualityObservations] = useState('');
   const [savingChecklist, setSavingChecklist] = useState(false);
   const [savingQuality, setSavingQuality] = useState(false);
+  const [savingInspection, setSavingInspection] = useState(false);
+  const [inspectionForm, setInspectionForm] = useState({
+    inspectorName: '',
+    productNameObserved: '',
+    textOk: false,
+    cutOk: false,
+    toneOk: false,
+    materialWidthOk: false,
+    observations: '',
+    signedOff: false
+  });
   const { user } = useAuth();
 
   useEffect(() => {
@@ -162,6 +173,32 @@ export const OrderDetail: React.FC = () => {
     }
   };
 
+  const handleInspectionFieldChange = (field: string, value: string | boolean) => {
+    setInspectionForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const saveFinalInspection = async () => {
+    setSavingInspection(true);
+    try {
+      await api.post(`/orders/${order.id}/final-inspections`, inspectionForm);
+      setInspectionForm({
+        inspectorName: '',
+        productNameObserved: '',
+        textOk: false,
+        cutOk: false,
+        toneOk: false,
+        materialWidthOk: false,
+        observations: '',
+        signedOff: false
+      });
+      await refreshOrder();
+    } catch (e: any) {
+      alert(e.response?.data?.error || 'No se pudo guardar la inspeccion final');
+    } finally {
+      setSavingInspection(false);
+    }
+  };
+
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center' }}>Cargando orden...</div>;
   if (!order) return <div style={{ padding: '3rem', textAlign: 'center' }}>Orden no encontrada.</div>;
 
@@ -175,11 +212,12 @@ export const OrderDetail: React.FC = () => {
             <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
               <span className={`status-badge status-${order.status.toLowerCase()}`}>{order.status.replace('_', ' ')}</span>
               <span style={{ color: 'var(--text-muted)' }}>Cliente: <b>{order.client?.name}</b></span>
+              {order.workType && <span style={{ color: 'var(--text-muted)' }}>Tipo: <b>{String(order.workType).replaceAll('_', ' ')}</b></span>}
             </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
-          {order.status !== 'Finalizadas' && (
+          {user?.role === 'ADMIN' && order.status !== 'Finalizadas' && (
             <button
               onClick={handleFinalize}
               className="btn"
@@ -219,6 +257,9 @@ export const OrderDetail: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <FormSection title="Origen de la Orden" icon={<Cpu size={24} />}>
             <DataField label="Maquina de Creacion" value={order.machine ? `${order.machine.name} (${order.machine.code})` : 'Administracion'} />
+            <DataField label="Clasificacion" value={order.classification} />
+            <DataField label="Muestra Original" value={order.hasSample ? 'Si' : 'No'} />
+            <DataField label="Trabajo" value={order.workType ? String(order.workType).replaceAll('_', ' ') : '-'} />
             <div style={{ gridColumn: 'span 2' }}>
               <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Operadores de Turno (Creacion)</p>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -246,9 +287,17 @@ export const OrderDetail: React.FC = () => {
             <DataField label="Tubo" value={order?.technicalSpec?.tube} />
             <DataField label="Tipo Impresion" value={order?.technicalSpec?.printingType} />
             <DataField label="Pie" value={order?.technicalSpec?.pie} />
+            <DataField label="Cabeza" value={order?.technicalSpec?.cabeza} />
+            <DataField label="Taca Derecha" value={order?.technicalSpec?.tacaRight} />
+            <DataField label="Taca Izquierda" value={order?.technicalSpec?.tacaLeft} />
+            <DataField label="Clise Centrado" value={order?.technicalSpec?.clisheAlignment} />
             <div style={{ gridColumn: 'span 2', marginTop: '1rem' }}>
               <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Especificaciones / Observaciones</p>
               <p style={{ fontSize: '0.875rem', fontWeight: 500, whiteSpace: 'pre-line' }}>{order.specifications || order.observations || '-'}</p>
+            </div>
+            <div style={{ gridColumn: 'span 2' }}>
+              <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Observaciones Tecnicas</p>
+              <p style={{ fontSize: '0.875rem', fontWeight: 500, whiteSpace: 'pre-line' }}>{order?.technicalSpec?.techObservations || '-'}</p>
             </div>
           </FormSection>
 
@@ -271,6 +320,80 @@ export const OrderDetail: React.FC = () => {
               ))}
             </div>
           </FormSection>
+
+          <FormSection title="Inspecciones Finales" icon={<ShieldCheck size={24} />}>
+            <div style={{ gridColumn: 'span 2' }}>
+              {order.finalInspections?.length > 0 ? (
+                order.finalInspections.map((inspection: any) => (
+                  <div key={inspection.id} className="card" style={{ marginBottom: '0.75rem', backgroundColor: 'rgba(255,255,255,0.02)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                      <strong>{inspection.inspectorName || inspection.inspectorUser?.name || 'Inspector sin nombre'}</strong>
+                      <span style={{ color: 'var(--text-muted)' }}>{new Date(inspection.date).toLocaleString()}</span>
+                    </div>
+                    <p style={{ marginTop: '0.4rem', color: 'var(--text-muted)' }}>
+                      Producto: {inspection.productNameObserved || '-'} | Texto: {inspection.textOk ? 'OK' : 'NO'} | Corte: {inspection.cutOk ? 'OK' : 'NO'} | Tono: {inspection.toneOk ? 'OK' : 'NO'} | Ancho Mat.: {inspection.materialWidthOk ? 'OK' : 'NO'}
+                    </p>
+                    <p style={{ marginTop: '0.4rem' }}>{inspection.observations || 'Sin observaciones'}</p>
+                    {inspection.signedOff && <span className="status-badge" style={{ marginTop: '0.35rem' }}>Firmada</span>}
+                  </div>
+                ))
+              ) : (
+                <p style={{ color: 'var(--text-muted)' }}>Todavia no hay inspecciones finales cargadas.</p>
+              )}
+            </div>
+
+            {user?.role === 'ADMIN' && (
+              <>
+                <div>
+                  <label className="label">Nombre del inspector</label>
+                  <input className="input" value={inspectionForm.inspectorName} onChange={(e) => handleInspectionFieldChange('inspectorName', e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">Producto observado</label>
+                  <input className="input" value={inspectionForm.productNameObserved} onChange={(e) => handleInspectionFieldChange('productNameObserved', e.target.value)} />
+                </div>
+                <div style={{ gridColumn: 'span 2', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  {[
+                    ['textOk', 'Texto'],
+                    ['cutOk', 'Corte'],
+                    ['toneOk', 'Tono'],
+                    ['materialWidthOk', 'Ancho Mat.']
+                  ].map(([field, label]) => (
+                    <label key={field} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                      <input
+                        type="checkbox"
+                        checked={(inspectionForm as any)[field]}
+                        onChange={(e) => handleInspectionFieldChange(field, e.target.checked)}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={inspectionForm.signedOff}
+                      onChange={(e) => handleInspectionFieldChange('signedOff', e.target.checked)}
+                    />
+                    <span>Firma final</span>
+                  </label>
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label className="label">Observaciones</label>
+                  <textarea
+                    className="input"
+                    style={{ minHeight: '100px', resize: 'vertical' }}
+                    value={inspectionForm.observations}
+                    onChange={(e) => handleInspectionFieldChange('observations', e.target.value)}
+                  />
+                </div>
+                <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button className="btn btn-primary" onClick={saveFinalInspection} disabled={savingInspection}>
+                    <span>{savingInspection ? 'Guardando...' : 'Guardar Inspeccion'}</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </FormSection>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -283,6 +406,9 @@ export const OrderDetail: React.FC = () => {
               <p style={{ fontSize: '0.875rem' }}>Fecha Alta: <b>{new Date(order.createdAt).toLocaleDateString()}</b></p>
               {order.deliveryDate && (
                 <p style={{ fontSize: '0.875rem' }}>Fecha Entrega: <b>{new Date(order.deliveryDate).toLocaleDateString()}</b></p>
+              )}
+              {order.estimatedBagQty && (
+                <p style={{ fontSize: '0.875rem' }}>Bolsas estimadas: <b>{order.estimatedBagQty.toLocaleString()}</b></p>
               )}
               <div style={{ marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
                 {order.products?.length > 0 ? order.products.map((p: any, idx: number) => (
@@ -520,9 +646,11 @@ const StageCard = ({
   );
 };
 
-const ApprovalToggle = ({ orderId, field, checked }: { orderId: number; field: string; checked: boolean }) => {
+const ApprovalToggle = ({ orderId, field, checked, disabled }: { orderId: number; field: string; checked: boolean; disabled?: boolean }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [value, setValue] = useState(checked);
+  const isDisabled = disabled || user?.role !== 'ADMIN';
 
   useEffect(() => {
     setValue(checked);
@@ -546,12 +674,13 @@ const ApprovalToggle = ({ orderId, field, checked }: { orderId: number; field: s
       type="button"
       className="btn"
       onClick={toggle}
-      disabled={loading}
+      disabled={loading || isDisabled}
       style={{
         minWidth: '150px',
         border: value ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid var(--border)',
         backgroundColor: value ? 'rgba(34, 197, 94, 0.16)' : 'rgba(255,255,255,0.03)',
-        color: value ? '#86efac' : 'var(--text-main)'
+        color: value ? '#86efac' : 'var(--text-main)',
+        opacity: isDisabled ? 0.5 : 1
       }}
     >
       <span>{loading ? 'Guardando...' : value ? 'Etapa aprobada' : 'Marcar aprobada'}</span>

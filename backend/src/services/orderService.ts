@@ -1,5 +1,10 @@
 import prisma from '../lib/prisma';
 
+type ActorContext = {
+  userId?: number;
+  role?: string;
+};
+
 const parseSafeInt = (val: any) => {
   const parsed = parseInt(val);
   return isNaN(parsed) ? null : parsed;
@@ -10,7 +15,79 @@ const parseSafeFloat = (val: any) => {
   return isNaN(parsed) ? null : parsed;
 };
 
-export const createOrder = async (orderData: any) => {
+const normalizeRole = (role?: string) => (role || 'ADMIN').toUpperCase();
+
+const ensureAdmin = (actor?: ActorContext) => {
+  if (normalizeRole(actor?.role) !== 'ADMIN') {
+    throw new Error('Solo administracion puede modificar la base de la orden');
+  }
+};
+
+const PROCESS_TYPE_LABELS: Record<string, string> = {
+  IMPRESION: 'Impresion',
+  LAMINACION: 'Laminacion',
+  REFILADO: 'Refilado'
+};
+
+const getLatestProcessByType = (processes: any[] = [], type: string) =>
+  processes
+    .filter((process) => process.type === type)
+    .sort((a, b) => new Date(b.updatedAt || b.endTime || b.startTime || 0).getTime() - new Date(a.updatedAt || a.endTime || a.startTime || 0).getTime())[0];
+
+const enrichOrderOperationalState = (order: any) => {
+  const processes = Array.isArray(order?.processes) ? order.processes : [];
+  const plannedTypes = new Set(processes.map((process: any) => process.type));
+  const latestPrinting = getLatestProcessByType(processes, 'IMPRESION');
+  const latestLamination = getLatestProcessByType(processes, 'LAMINACION');
+  const latestRefilado = getLatestProcessByType(processes, 'REFILADO');
+
+  let operationalStatus = 'PLANIFICADA';
+  let currentStage: string | null = null;
+
+  if (order.status === 'Finalizadas') {
+    operationalStatus = 'FINALIZADA';
+  } else if (order.approvedRefilado) {
+    operationalStatus = 'PENDIENTE_CONTROL';
+    currentStage = 'REFILADO';
+  } else if (latestRefilado) {
+    currentStage = 'REFILADO';
+    operationalStatus = latestRefilado.status === 'finalizado' ? 'REFILADO_COMPLETO' : 'EN_REFILADO';
+  } else if (order.approvedLamination) {
+    operationalStatus = plannedTypes.has('REFILADO') ? 'PENDIENTE_REFILADO' : 'PENDIENTE_CONTROL';
+    currentStage = plannedTypes.has('REFILADO') ? 'REFILADO' : 'LAMINACION';
+  } else if (latestLamination) {
+    currentStage = 'LAMINACION';
+    operationalStatus = latestLamination.status === 'finalizado' ? 'LAMINACION_COMPLETA' : 'EN_LAMINACION';
+  } else if (order.approvedPrinting) {
+    if (plannedTypes.has('LAMINACION')) {
+      operationalStatus = 'PENDIENTE_LAMINACION';
+      currentStage = 'LAMINACION';
+    } else if (plannedTypes.has('REFILADO')) {
+      operationalStatus = 'PENDIENTE_REFILADO';
+      currentStage = 'REFILADO';
+    } else {
+      operationalStatus = 'PENDIENTE_CONTROL';
+      currentStage = 'IMPRESION';
+    }
+  } else if (latestPrinting) {
+    currentStage = 'IMPRESION';
+    operationalStatus = latestPrinting.status === 'finalizado' ? 'IMPRESION_COMPLETA' : 'EN_IMPRESION';
+  } else if (plannedTypes.has('IMPRESION')) {
+    operationalStatus = 'PENDIENTE_IMPRESION';
+    currentStage = 'IMPRESION';
+  }
+
+  return {
+    ...order,
+    currentStage,
+    currentStageLabel: currentStage ? PROCESS_TYPE_LABELS[currentStage] || currentStage : null,
+    operationalStatus
+  };
+};
+
+export const createOrder = async (orderData: any, actor?: ActorContext) => {
+  ensureAdmin(actor);
+
   const { 
     orderNumber, 
     clientId, 
@@ -25,7 +102,11 @@ export const createOrder = async (orderData: any) => {
     machineIds,
     deliveryDate,
     specifications,
-    observations
+    observations,
+    classification,
+    workType,
+    hasSample,
+    estimatedBagQty
   } = orderData;
 
   const finalCreatorId = creatorId ? parseInt(creatorId) : 1;
@@ -42,6 +123,10 @@ export const createOrder = async (orderData: any) => {
         orderNumber,
         clientId: parseInt(clientId),
         productId: finalProductId,
+        classification,
+        workType,
+        hasSample: Boolean(hasSample),
+        estimatedBagQty: parseSafeInt(estimatedBagQty),
         plannedQty: finalPlannedQty,
         unit,
         deliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
@@ -137,6 +222,10 @@ export const createOrder = async (orderData: any) => {
           designName: technicalSpec.designName,
           cabeza: technicalSpec.cabeza,
           printingType: technicalSpec.printingType,
+          tacaRight: technicalSpec.tacaRight,
+          tacaLeft: technicalSpec.tacaLeft,
+          clisheAlignment: technicalSpec.clisheAlignment,
+          techObservations: technicalSpec.techObservations,
         }
       });
     }
@@ -198,7 +287,7 @@ export const getAllOrders = async (machineId?: number, month?: string) => {
     };
   }
 
-  return await prisma.productionOrder.findMany({
+  const orders = await prisma.productionOrder.findMany({
     where,
     include: {
       client: true,
@@ -218,10 +307,12 @@ export const getAllOrders = async (machineId?: number, month?: string) => {
       createdAt: 'desc'
     }
   });
+
+  return orders.map(enrichOrderOperationalState);
 };
 
 export const getOrderById = async (id: number) => {
-  return await prisma.productionOrder.findUnique({
+  const order = await prisma.productionOrder.findUnique({
     where: { id },
     include: {
       client: true,
@@ -242,6 +333,14 @@ export const getOrderById = async (id: number) => {
         }
       },
       qualityControls: true,
+      finalInspections: {
+        include: {
+          inspectorUser: true
+        },
+        orderBy: {
+          date: 'desc'
+        }
+      },
       processes: {
         include: {
           machine: true,
@@ -250,10 +349,20 @@ export const getOrderById = async (id: number) => {
           laminationData: true,
           refiladoData: true,
           materialLots: true,
+          timeLogs: {
+            include: {
+              operator: true
+            },
+            orderBy: {
+              startTime: 'asc'
+            }
+          }
         }
       },
     }
   });
+
+  return order ? enrichOrderOperationalState(order) : null;
 };
 
 export const createProcess = async (processData: any) => {
@@ -291,6 +400,13 @@ export const createProcess = async (processData: any) => {
         observations,
       }
     });
+
+    if (order.status !== 'Finalizadas') {
+      await tx.productionOrder.update({
+        where: { id: order.id },
+        data: { status: 'En proceso' }
+      });
+    }
 
     // Save Material Lots if provided (Printing and Lamination)
     if (processData.materialLots && Array.isArray(processData.materialLots)) {
@@ -378,6 +494,10 @@ export const createProcess = async (processData: any) => {
         data: {
           processId: process.id,
           exitSense: specificData.exitSense,
+          tacaRight: specificData.tacaRight,
+          tacaLeft: specificData.tacaLeft,
+          deCabeza: typeof specificData.deCabeza === 'boolean' ? specificData.deCabeza : null,
+          deTripa: typeof specificData.deTripa === 'boolean' ? specificData.deTripa : null,
           coilDiameter: specificData.coilDiameter ? parseFloat(specificData.coilDiameter) : null,
           processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
           coilCount: specificData.coilCount ? parseInt(specificData.coilCount) : null,
@@ -501,7 +621,9 @@ export const getCostStats = async () => {
   return stats;
 };
 
-export const finalizeOrder = async (id: number) => {
+export const finalizeOrder = async (id: number, actor?: ActorContext) => {
+  ensureAdmin(actor);
+
   return await prisma.$transaction(async (tx) => {
     const order = await tx.productionOrder.findUnique({
       where: { id },
@@ -555,7 +677,9 @@ export const finalizeOrder = async (id: number) => {
   });
 };
 
-export const deleteOrder = async (id: number) => {
+export const deleteOrder = async (id: number, actor?: ActorContext) => {
+  ensureAdmin(actor);
+
   return await prisma.productionOrder.delete({
     where: { id }
   });
@@ -707,21 +831,35 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
   return [header, ...rows].join('\n');
 };
 
-export const updateOrder = async (id: number, orderData: any) => {
+export const updateOrder = async (id: number, orderData: any, actor?: ActorContext) => {
+  ensureAdmin(actor);
+
   const { 
-    orderNumber, clientId, productId, plannedQty, unit, 
-    machineIds, operatorsText, technicalSpec, colorOrders
+    orderNumber, clientId, productId, plannedQty, unit, products,
+    machineIds, operatorsText, technicalSpec, colorOrders,
+    classification, workType, hasSample, estimatedBagQty,
+    specifications, observations
   } = orderData;
 
   return await prisma.$transaction(async (tx) => {
+    const firstProduct = products && products.length > 0 ? products[0] : { productId, plannedQty };
+    const finalProductId = firstProduct?.productId ? parseInt(firstProduct.productId) : (productId ? parseInt(productId) : null);
+    const finalPlannedQty = firstProduct?.plannedQty ? String(firstProduct.plannedQty) : (plannedQty ? String(plannedQty) : null);
+
     const dataToUpdate: any = {};
     if (orderNumber !== undefined) dataToUpdate.orderNumber = orderNumber;
     if (clientId !== undefined) dataToUpdate.clientId = parseInt(clientId);
-    if (productId !== undefined) dataToUpdate.productId = parseInt(productId);
-    if (plannedQty !== undefined) dataToUpdate.plannedQty = plannedQty ? String(plannedQty) : null;
+    if (finalProductId !== undefined) dataToUpdate.productId = finalProductId;
+    if (finalPlannedQty !== undefined) dataToUpdate.plannedQty = finalPlannedQty;
     if (unit !== undefined) dataToUpdate.unit = unit;
+    if (classification !== undefined) dataToUpdate.classification = classification;
+    if (workType !== undefined) dataToUpdate.workType = workType;
+    if (hasSample !== undefined) dataToUpdate.hasSample = Boolean(hasSample);
+    if (estimatedBagQty !== undefined) dataToUpdate.estimatedBagQty = parseSafeInt(estimatedBagQty);
     if (machineIds !== undefined) dataToUpdate.machineId = (machineIds && machineIds.length > 0) ? parseInt(machineIds[0]) : null;
     if (operatorsText !== undefined) dataToUpdate.operatorsText = operatorsText;
+    if (specifications !== undefined) dataToUpdate.specifications = specifications;
+    if (observations !== undefined) dataToUpdate.observations = observations;
     if (orderData.approvedPrinting !== undefined) dataToUpdate.approvedPrinting = orderData.approvedPrinting;
     if (orderData.approvedLamination !== undefined) dataToUpdate.approvedLamination = orderData.approvedLamination;
     if (orderData.approvedRefilado !== undefined) dataToUpdate.approvedRefilado = orderData.approvedRefilado;
@@ -730,6 +868,20 @@ export const updateOrder = async (id: number, orderData: any) => {
       where: { id },
       data: dataToUpdate
     });
+
+    if (products && Array.isArray(products)) {
+      await tx.orderProduct.deleteMany({ where: { orderId: id } });
+      for (const productRow of products) {
+        if (!productRow.productId) continue;
+        await tx.orderProduct.create({
+          data: {
+            orderId: id,
+            productId: parseInt(productRow.productId),
+            plannedQty: String(productRow.plannedQty)
+          }
+        });
+      }
+    }
 
     if (technicalSpec) {
       await tx.technicalSpec.upsert({
@@ -745,6 +897,10 @@ export const updateOrder = async (id: number, orderData: any) => {
           designName: technicalSpec.designName,
           cabeza: technicalSpec.cabeza,
           printingType: technicalSpec.printingType,
+          tacaRight: technicalSpec.tacaRight,
+          tacaLeft: technicalSpec.tacaLeft,
+          clisheAlignment: technicalSpec.clisheAlignment,
+          techObservations: technicalSpec.techObservations,
         },
         create: {
           orderId: id,
@@ -758,6 +914,10 @@ export const updateOrder = async (id: number, orderData: any) => {
           designName: technicalSpec.designName,
           cabeza: technicalSpec.cabeza,
           printingType: technicalSpec.printingType,
+          tacaRight: technicalSpec.tacaRight,
+          tacaLeft: technicalSpec.tacaLeft,
+          clisheAlignment: technicalSpec.clisheAlignment,
+          techObservations: technicalSpec.techObservations,
         }
       });
     }
@@ -895,7 +1055,9 @@ export const getQualityControls = async (orderId: number) => {
   });
 };
 
-export const saveQualityControl = async (data: any) => {
+export const saveQualityControl = async (data: any, actor?: ActorContext) => {
+  ensureAdmin(actor);
+
   const { orderId, stage, controlData } = data;
 
   const existing = await prisma.qualityControl.findFirst({
@@ -914,6 +1076,107 @@ export const saveQualityControl = async (data: any) => {
       orderId: parseInt(orderId),
       stage,
       data: JSON.stringify(controlData)
+    }
+  });
+};
+
+export const getProcessTimeLogs = async (orderId: number, stage?: string) => {
+  return await prisma.processTimeLog.findMany({
+    where: {
+      process: {
+        orderId,
+        ...(stage ? { type: stage } : {})
+      }
+    },
+    include: {
+      operator: true,
+      process: {
+        include: {
+          machine: true
+        }
+      }
+    },
+    orderBy: {
+      startTime: 'asc'
+    }
+  });
+};
+
+export const saveProcessTimeLog = async (data: any) => {
+  const { orderId, stage, operatorId, description, date, startTime, endTime } = data;
+
+  if (!orderId || !stage || !startTime || !endTime) {
+    throw new Error('Faltan datos obligatorios para registrar tiempos');
+  }
+
+  const process = await prisma.productionProcess.findFirst({
+    where: { orderId: parseInt(orderId), type: stage },
+    orderBy: { id: 'desc' }
+  });
+
+  if (!process) {
+    throw new Error('Primero debes registrar la etapa antes de cargar tiempos');
+  }
+
+  const [startHours = '0', startMinutes = '0'] = String(startTime).split(':');
+  const [endHours = '0', endMinutes = '0'] = String(endTime).split(':');
+  const baseDate = date ? new Date(date) : new Date();
+  const startDateTime = new Date(baseDate);
+  startDateTime.setHours(parseInt(startHours, 10), parseInt(startMinutes, 10), 0, 0);
+  const endDateTime = new Date(baseDate);
+  endDateTime.setHours(parseInt(endHours, 10), parseInt(endMinutes, 10), 0, 0);
+
+  if (endDateTime <= startDateTime) {
+    throw new Error('La hora de fin debe ser mayor a la hora de inicio');
+  }
+
+  return await prisma.processTimeLog.create({
+    data: {
+      processId: process.id,
+      operatorId: operatorId ? parseInt(operatorId) : null,
+      date: baseDate,
+      description,
+      startTime: startDateTime,
+      endTime: endDateTime
+    },
+    include: {
+      operator: true
+    }
+  });
+};
+
+export const getFinalInspections = async (orderId: number) => {
+  return await prisma.finalInspection.findMany({
+    where: { orderId },
+    include: {
+      inspectorUser: true
+    },
+    orderBy: {
+      date: 'desc'
+    }
+  });
+};
+
+export const saveFinalInspection = async (data: any, actor?: ActorContext) => {
+  ensureAdmin(actor);
+
+  const { orderId, inspectorName, textOk, cutOk, toneOk, materialWidthOk, observations, productNameObserved, signedOff } = data;
+
+  return await prisma.finalInspection.create({
+    data: {
+      orderId: parseInt(orderId),
+      inspectorUserId: actor?.userId || null,
+      inspectorName,
+      textOk: Boolean(textOk),
+      cutOk: Boolean(cutOk),
+      toneOk: Boolean(toneOk),
+      materialWidthOk: Boolean(materialWidthOk),
+      observations,
+      productNameObserved,
+      signedOff: Boolean(signedOff)
+    },
+    include: {
+      inspectorUser: true
     }
   });
 };

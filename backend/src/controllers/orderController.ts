@@ -1,9 +1,14 @@
 import { Request, Response } from 'express';
 import * as orderService from '../services/orderService';
 
+const getActor = (req: Request) => ({
+  userId: req.headers['x-user-id'] ? parseInt(req.headers['x-user-id'] as string, 10) : undefined,
+  role: typeof req.headers['x-user-role'] === 'string' ? req.headers['x-user-role'] : undefined
+});
+
 export const createOrder = async (req: Request, res: Response) => {
   try {
-    const order = await orderService.createOrder(req.body);
+    const order = await orderService.createOrder(req.body, getActor(req));
     res.status(201).json(order);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -12,7 +17,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
 export const updateOrder = async (req: Request, res: Response) => {
   try {
-    const order = await orderService.updateOrder(parseInt(req.params.id as string), req.body);
+    const order = await orderService.updateOrder(parseInt(req.params.id as string), req.body, getActor(req));
     res.json(order);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -70,7 +75,7 @@ export const getCostStats = async (req: Request, res: Response) => {
 
 export const finalizeOrder = async (req: Request, res: Response) => {
   try {
-    const order = await orderService.finalizeOrder(parseInt(req.params.id as string));
+    const order = await orderService.finalizeOrder(parseInt(req.params.id as string), getActor(req));
     res.json(order);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -79,7 +84,7 @@ export const finalizeOrder = async (req: Request, res: Response) => {
 
 export const deleteOrder = async (req: Request, res: Response) => {
   try {
-    await orderService.deleteOrder(parseInt(req.params.id as string));
+    await orderService.deleteOrder(parseInt(req.params.id as string), getActor(req));
     res.status(204).send();
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -147,8 +152,51 @@ export const saveQualityControl = async (req: Request, res: Response) => {
     const control = await orderService.saveQualityControl({
       ...req.body,
       orderId: parseInt(req.params.orderId as string)
-    });
+    }, getActor(req));
     res.status(201).json(control);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+export const getProcessTimeLogs = async (req: Request, res: Response) => {
+  try {
+    const stage = typeof req.query.stage === 'string' ? req.query.stage : undefined;
+    const logs = await orderService.getProcessTimeLogs(parseInt(req.params.orderId as string), stage);
+    res.json(logs);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const saveProcessTimeLog = async (req: Request, res: Response) => {
+  try {
+    const log = await orderService.saveProcessTimeLog({
+      ...req.body,
+      orderId: parseInt(req.params.orderId as string)
+    });
+    res.status(201).json(log);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+export const getFinalInspections = async (req: Request, res: Response) => {
+  try {
+    const inspections = await orderService.getFinalInspections(parseInt(req.params.orderId as string));
+    res.json(inspections);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const saveFinalInspection = async (req: Request, res: Response) => {
+  try {
+    const inspection = await orderService.saveFinalInspection({
+      ...req.body,
+      orderId: parseInt(req.params.orderId as string)
+    }, getActor(req));
+    res.status(201).json(inspection);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }

@@ -49,6 +49,10 @@ model ProductionOrder {
   clientId       Int
   productId      Int?
   sampleId       Int?
+  classification String?
+  workType       String?
+  hasSample      Boolean             @default(false)
+  estimatedBagQty Int?
   plannedQty     String?
   producedQty    Float               @default(0)
   unit           String
@@ -84,6 +88,7 @@ model ProductionOrder {
   products       OrderProduct[]
   checklists     ProcessChecklist[]
   qualityControls QualityControl[]
+  finalInspections FinalInspection[]
 }
 
 model OrderOperator {
@@ -111,6 +116,7 @@ model TechnicalSpec {
   printingType     String?
   tacaRight        String?
   tacaLeft         String?
+  clisheAlignment  String?
   techObservations String?
   order            ProductionOrder @relation(fields: [orderId], references: [id])
 }
@@ -156,9 +162,22 @@ model ProductionProcess {
   laminationData ProcessLamination?
   printingData   ProcessPrinting?
   refiladoData   ProcessRefilado?
+  timeLogs       ProcessTimeLog[]
   operator       Operator?          @relation(fields: [operatorId], references: [id])
   machine        Machine?           @relation(fields: [machineId], references: [id])
   order          ProductionOrder    @relation(fields: [orderId], references: [id])
+}
+
+model ProcessTimeLog {
+  id          Int               @id @default(autoincrement())
+  processId   Int
+  operatorId  Int?
+  date        DateTime          @default(now())
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  process     ProductionProcess @relation(fields: [processId], references: [id], onDelete: Cascade)
+  operator    Operator?         @relation(fields: [operatorId], references: [id])
 }
 
 model MaterialLot {
@@ -340,6 +359,7 @@ model User {
   exportBatches ExportBatch[]
   importLogs    ImportLog[]
   ordersCreated ProductionOrder[]
+  finalInspections FinalInspection[] @relation("FinalInspectionInspector")
   operator      Operator?         @relation(fields: [operatorId], references: [id])
   machine       Machine?          @relation(fields: [machineId], references: [id])
 }
@@ -355,6 +375,7 @@ model Operator {
   processes ProductionProcess[]
   orders    OrderOperator[]
   checklists ProcessChecklist[]
+  timeLogs  ProcessTimeLog[]
   user      User?
 }
 
@@ -438,6 +459,23 @@ model QualityControl {
   data        String          // JSON string storing specific fields for Impresión, Laminación or Refilación
   
   order       ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model FinalInspection {
+  id                  Int             @id @default(autoincrement())
+  orderId             Int
+  date                DateTime        @default(now())
+  inspectorUserId     Int?
+  inspectorName       String?
+  textOk              Boolean         @default(false)
+  cutOk               Boolean         @default(false)
+  toneOk              Boolean         @default(false)
+  materialWidthOk     Boolean         @default(false)
+  observations        String?
+  productNameObserved String?
+  signedOff           Boolean         @default(false)
+  order               ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  inspectorUser       User?           @relation("FinalInspectionInspector", fields: [inspectorUserId], references: [id])
 }
 
 model SystemAuditLog {
