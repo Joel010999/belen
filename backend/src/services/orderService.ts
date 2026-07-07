@@ -15,6 +15,12 @@ const parseSafeFloat = (val: any) => {
   return isNaN(parsed) ? null : parsed;
 };
 
+const normalizeQtyText = (val: any) => {
+  if (val === undefined || val === null) return null;
+  const text = String(val).trim();
+  return text.length > 0 ? text : null;
+};
+
 const normalizeRole = (role?: string) => (role || 'ADMIN').toUpperCase();
 
 const ensureAdmin = (actor?: ActorContext) => {
@@ -27,6 +33,16 @@ const PROCESS_TYPE_LABELS: Record<string, string> = {
   IMPRESION: 'Impresion',
   LAMINACION: 'Laminacion',
   REFILADO: 'Refilado'
+};
+
+const CONSUMPTION_TYPE_TO_PROCESS_TYPE: Record<string, string> = {
+  PRINTING: 'IMPRESION',
+  LAMINATION: 'LAMINACION'
+};
+
+const TRANSACTION_OPTIONS = {
+  maxWait: 10000,
+  timeout: 30000
 };
 
 const getLatestProcessByType = (processes: any[] = [], type: string) =>
@@ -110,13 +126,11 @@ export const createOrder = async (orderData: any, actor?: ActorContext) => {
   } = orderData;
 
   const finalCreatorId = creatorId ? parseInt(creatorId) : 1;
+  const firstProduct = products && products.length > 0 ? products[0] : { productId, plannedQty };
+  const finalProductId = parseSafeInt(firstProduct?.productId ?? productId);
+  const finalPlannedQty = normalizeQtyText(firstProduct?.plannedQty ?? plannedQty);
 
   return await prisma.$transaction(async (tx) => {
-    // Handle fallback if single product sent instead of array
-    const firstProduct = products && products.length > 0 ? products[0] : { productId, plannedQty };
-    const finalProductId = firstProduct?.productId ? parseInt(firstProduct.productId) : (productId ? parseInt(productId) : null);
-    const finalPlannedQty = firstProduct?.plannedQty ? String(firstProduct.plannedQty) : (plannedQty ? String(plannedQty) : null);
-
     // 1. Create the base order
     const order = await tx.productionOrder.create({
       data: {
@@ -240,7 +254,7 @@ export const createOrder = async (orderData: any, actor?: ActorContext) => {
             colorName: color.colorName,
             lotNumber: color.lotNumber,
             formula: color.formula,
-            supplyId: parseSafeInt(color.insumoId),
+            supplyId: parseSafeInt(color.supplyId ?? color.insumoId),
             changesToConsider: color.changesToConsider,
           }
         });
@@ -248,7 +262,7 @@ export const createOrder = async (orderData: any, actor?: ActorContext) => {
     }
 
     return order;
-  });
+  }, TRANSACTION_OPTIONS);
 };
 
 const buildMonthRange = (month?: string) => {
@@ -380,7 +394,8 @@ export const createProcess = async (processData: any) => {
 
   return await prisma.$transaction(async (tx) => {
     const order = await tx.productionOrder.findUnique({
-      where: { id: parseInt(orderId) }
+      where: { id: parseInt(orderId) },
+      include: { products: true }
     });
 
     if (!order) {
@@ -447,10 +462,12 @@ export const createProcess = async (processData: any) => {
       }
     }
 
-    // Discount scrap from stock
-    if (scrapKg && parseFloat(scrapKg) > 0 && order) {
+    const fallbackProductId = order.productId ?? order.products?.[0]?.productId ?? null;
+
+    // Discount scrap from stock only when the order is linked to a real product
+    if (scrapKg && parseFloat(scrapKg) > 0 && fallbackProductId) {
       await tx.currentStock.updateMany({
-        where: { productId: order.productId },
+        where: { productId: fallbackProductId },
         data: {
           stockActual: { decrement: parseFloat(scrapKg) },
           lastUpdate: new Date()
@@ -461,7 +478,7 @@ export const createProcess = async (processData: any) => {
         data: {
           type: 'EGRESO',
           itemType: 'PRODUCTO',
-          productId: order.productId,
+          productId: fallbackProductId,
           qty: parseFloat(scrapKg),
           unit: 'KG',
           sign: -1,
@@ -506,7 +523,7 @@ export const createProcess = async (processData: any) => {
     }
 
     return process;
-  });
+  }, TRANSACTION_OPTIONS);
 };
 
 export const getDashboardStats = async (machineId?: number) => {
@@ -627,7 +644,7 @@ export const finalizeOrder = async (id: number, actor?: ActorContext) => {
   return await prisma.$transaction(async (tx) => {
     const order = await tx.productionOrder.findUnique({
       where: { id },
-      include: { processes: true }
+      include: { processes: true, products: true }
     });
 
     if (!order) throw new Error("Orden no encontrada");
@@ -638,19 +655,22 @@ export const finalizeOrder = async (id: number, actor?: ActorContext) => {
       data: { status: 'Finalizadas', closedAt: new Date() }
     });
 
-    // Calculate total produced (could be plannedQty or based on last stage)
-    const qtyProduced = parseSafeFloat(order.plannedQty?.replace(/[^0-9.]/g, '')) || 0;
+    const fallbackProductId = order.productId ?? order.products?.[0]?.productId ?? null;
+    const fallbackPlannedQty = order.plannedQty ?? order.products?.[0]?.plannedQty ?? null;
 
-    if (order.productId && qtyProduced > 0) {
+    // Calculate total produced (could be plannedQty or based on last stage)
+    const qtyProduced = parseSafeFloat(fallbackPlannedQty?.replace(/[^0-9.]/g, '')) || 0;
+
+    if (fallbackProductId && qtyProduced > 0) {
       // Increase product stock
       await tx.currentStock.upsert({
-        where: { productId: order.productId },
+        where: { productId: fallbackProductId },
       update: {
         stockActual: { increment: qtyProduced },
         lastUpdate: new Date()
       },
       create: {
-        productId: order.productId,
+        productId: fallbackProductId,
         stockActual: qtyProduced,
         itemType: 'PRODUCTO',
         unit: order.unit,
@@ -663,7 +683,7 @@ export const finalizeOrder = async (id: number, actor?: ActorContext) => {
         data: {
           type: 'INGRESO',
           itemType: 'PRODUCTO',
-          productId: order.productId,
+          productId: fallbackProductId,
           qty: qtyProduced,
           unit: order.unit,
           sign: 1,
@@ -674,7 +694,7 @@ export const finalizeOrder = async (id: number, actor?: ActorContext) => {
     }
 
     return updatedOrder;
-  });
+  }, TRANSACTION_OPTIONS);
 };
 
 export const deleteOrder = async (id: number, actor?: ActorContext) => {
@@ -842,9 +862,11 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
   } = orderData;
 
   return await prisma.$transaction(async (tx) => {
-    const firstProduct = products && products.length > 0 ? products[0] : { productId, plannedQty };
-    const finalProductId = firstProduct?.productId ? parseInt(firstProduct.productId) : (productId ? parseInt(productId) : null);
-    const finalPlannedQty = firstProduct?.plannedQty ? String(firstProduct.plannedQty) : (plannedQty ? String(plannedQty) : null);
+    const hasProductsPayload = Array.isArray(products) && products.length > 0;
+    const shouldTouchPrimaryProduct = products !== undefined || productId !== undefined || plannedQty !== undefined;
+    const firstProduct = hasProductsPayload ? products[0] : { productId, plannedQty };
+    const finalProductId = shouldTouchPrimaryProduct ? parseSafeInt(firstProduct?.productId ?? productId) : undefined;
+    const finalPlannedQty = shouldTouchPrimaryProduct ? normalizeQtyText(firstProduct?.plannedQty ?? plannedQty) : undefined;
 
     const dataToUpdate: any = {};
     if (orderNumber !== undefined) dataToUpdate.orderNumber = orderNumber;
@@ -864,10 +886,10 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
     if (orderData.approvedLamination !== undefined) dataToUpdate.approvedLamination = orderData.approvedLamination;
     if (orderData.approvedRefilado !== undefined) dataToUpdate.approvedRefilado = orderData.approvedRefilado;
 
-    const order = await tx.productionOrder.update({
-      where: { id },
-      data: dataToUpdate
-    });
+      const order = await tx.productionOrder.update({
+        where: { id },
+        data: dataToUpdate
+      });
 
     if (products && Array.isArray(products)) {
       await tx.orderProduct.deleteMany({ where: { orderId: id } });
@@ -932,7 +954,7 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
             colorName: color.colorName,
             lotNumber: color.lotNumber,
             formula: color.formula,
-            supplyId: parseSafeInt(color.insumoId),
+            supplyId: parseSafeInt(color.supplyId ?? color.insumoId),
           }
         });
       }
@@ -959,7 +981,7 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
     }
 
     return order;
-  });
+  }, TRANSACTION_OPTIONS);
 };
 
 export const changeStatus = async (id: number, newStatus: string) => {
@@ -1272,13 +1294,15 @@ export const registerConsumptions = async (orderId: number, data: any) => {
       }
     }
 
-    // 2. Optionally update Real Meters in the Process
-    // If they send a processId or we find the active process for this order and type
+    // 2. Optionally update real meters on the latest process of that stage
     if (realMeters) {
-        const process = await tx.productionProcess.findFirst({
-            where: { orderId, type: type === 'PRINTING' ? 'Impresión' : 'Laminación' },
-            orderBy: { id: 'desc' }
-        });
+        const processType = CONSUMPTION_TYPE_TO_PROCESS_TYPE[type];
+        const process = processType
+          ? await tx.productionProcess.findFirst({
+              where: { orderId, type: processType },
+              orderBy: { id: 'desc' }
+            })
+          : null;
         
         if (process) {
             if (type === 'PRINTING') {
@@ -1302,5 +1326,5 @@ export const registerConsumptions = async (orderId: number, data: any) => {
     }
 
     return { success: true, message: 'Consumos registrados y stock actualizado' };
-  });
+  }, TRANSACTION_OPTIONS);
 };
