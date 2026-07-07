@@ -233,7 +233,7 @@ export const OrderDetail: React.FC = () => {
               </span>
             </button>
           )}
-          {user?.role === 'ADMIN' && (
+          {(user?.role === 'ADMIN' || user?.role === 'MACHINE') && (
             <Link
               to={`/ordenes/editar/${order.id}`}
               className="btn btn-primary"

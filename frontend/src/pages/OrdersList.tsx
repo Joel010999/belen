@@ -198,15 +198,15 @@ export const OrdersList: React.FC = () => {
                       <Link to={`/ordenes/${order.id}`} style={{ color: 'var(--text-muted)', background: 'none' }} title="Ver Detalle">
                         <Eye size={18} />
                       </Link>
+                      {(user?.role === 'ADMIN' || user?.role === 'MACHINE') && (
+                        <Link to={`/ordenes/editar/${order.id}`} style={{ color: 'var(--primary)', background: 'none' }} title="Editar Orden">
+                          <Edit size={18} />
+                        </Link>
+                      )}
                       {user?.role === 'ADMIN' && (
-                        <>
-                          <Link to={`/ordenes/editar/${order.id}`} style={{ color: 'var(--primary)', background: 'none' }} title="Editar Orden">
-                            <Edit size={18} />
-                          </Link>
-                          <button onClick={() => handleDelete(order.id)} style={{ color: 'var(--danger)', background: 'none' }} title="Eliminar">
-                            <Trash2 size={18} />
-                          </button>
-                        </>
+                        <button onClick={() => handleDelete(order.id)} style={{ color: 'var(--danger)', background: 'none' }} title="Eliminar">
+                          <Trash2 size={18} />
+                        </button>
                       )}
                     </div>
                   </td>

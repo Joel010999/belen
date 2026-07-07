@@ -167,24 +167,32 @@ async function runTests() {
   assert(createdOrderDetail.technicalSpec?.meters === 1200, 'La ficha tecnica no guardo los metros');
   assert(createdOrderDetail.products?.length === 1, 'La orden no guardo sus productos');
 
-  console.log('2. Verificando restriccion de edicion para usuario de maquina...');
-  let machineEditBlocked = false;
-  try {
-    await api(`/orders/${createdOrder.id}`, {
-      method: 'PUT',
-      headers: machineHeaders,
-      body: JSON.stringify({
-        orderNumber: createdOrder.orderNumber,
-        clientId: clients[0].id,
-        products: [{ productId: products[0].id, plannedQty: '6000 bolsas' }],
-        unit: 'UN',
-        observations: 'Esto no deberia permitirse'
-      })
+  console.log('2. Verificando edicion de orden para usuario de maquina...');
+  await api(`/orders/${createdOrder.id}`, {
+    method: 'PUT',
+    headers: machineHeaders,
+    body: JSON.stringify({
+      orderNumber: createdOrder.orderNumber,
+      clientId: clients[0].id,
+      products: [{ productId: products[0].id, plannedQty: '6000 bolsas' }],
+      unit: 'UN',
+      machineIds: [String(printingMachine.id), String(laminationMachine.id), String(refiladoMachine.id)],
+      operatorsText: 'Actualizado desde terminal de planta',
+      observations: 'Edicion permitida para operario desde ordenes de produccion',
+      technicalSpec: {
+        ...orderPayload.technicalSpec
+      },
+      colorOrders: [
+        { sequence: 1, colorName: greenSupply.name, supplyId: greenSupply.id },
+        { sequence: 2, colorName: redSupply.name, supplyId: redSupply.id }
+      ]
     });
-  } catch (error) {
-    machineEditBlocked = String(error.message).includes('Solo administracion');
-  }
-  assert(machineEditBlocked, 'Un usuario de maquina pudo editar la base de la orden');
+  });
+  const machineEditedOrder = await api(`/orders/${createdOrder.id}`);
+  assert(
+    machineEditedOrder.observations === 'Edicion permitida para operario desde ordenes de produccion',
+    'El usuario de maquina no pudo editar la orden'
+  );
 
   console.log('3. Registrando impresion...');
   await api('/orders/processes', {

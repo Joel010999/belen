@@ -29,6 +29,13 @@ const ensureAdmin = (actor?: ActorContext) => {
   }
 };
 
+const ensureOrderEditor = (actor?: ActorContext) => {
+  const role = normalizeRole(actor?.role);
+  if (role !== 'ADMIN' && role !== 'MACHINE') {
+    throw new Error('No tenes permisos para editar esta orden');
+  }
+};
+
 const PROCESS_TYPE_LABELS: Record<string, string> = {
   IMPRESION: 'Impresion',
   LAMINACION: 'Laminacion',
@@ -852,7 +859,7 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
 };
 
 export const updateOrder = async (id: number, orderData: any, actor?: ActorContext) => {
-  ensureAdmin(actor);
+  ensureOrderEditor(actor);
 
   const { 
     orderNumber, clientId, productId, plannedQty, unit, products,
