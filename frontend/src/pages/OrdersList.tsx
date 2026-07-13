@@ -153,6 +153,7 @@ export const OrdersList: React.FC = () => {
             <option value="EN_IMPRESION">En impresion</option>
             <option value="EN_LAMINACION">En laminacion</option>
             <option value="EN_REFILADO">En refilado</option>
+            <option value="EN_CONFECCION">En confeccion</option>
             <option value="PENDIENTE_CONTROL">Pendiente control</option>
             <option value="FINALIZADA">Finalizadas</option>
           </select>
@@ -198,7 +199,7 @@ export const OrdersList: React.FC = () => {
                       <Link to={`/ordenes/${order.id}`} style={{ color: 'var(--text-muted)', background: 'none' }} title="Ver Detalle">
                         <Eye size={18} />
                       </Link>
-                      {(user?.role === 'ADMIN' || user?.role === 'MACHINE') && (
+                      {user?.role === 'ADMIN' && (
                         <Link to={`/ordenes/editar/${order.id}`} style={{ color: 'var(--primary)', background: 'none' }} title="Editar Orden">
                           <Edit size={18} />
                         </Link>

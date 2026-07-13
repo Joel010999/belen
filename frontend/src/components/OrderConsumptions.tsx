@@ -67,13 +67,25 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
     return parts.reduce((acc, val) => acc + (parseFloat(val.trim()) || 0), 0);
   };
 
+  const formatConsumptionCost = (item: any) => {
+    const supply = supplies.find((s) => s.id === item.supplyId);
+    const price = Number(supply?.price);
+    if (!price || Number.isNaN(price)) return '-';
+
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+      maximumFractionDigits: 2
+    }).format((Number(item.realQty) || 0) * price);
+  };
+
   const handlePrintingChange = (index: number, field: string, value: string) => {
     const updated = [...printingColors];
     updated[index][field] = value;
     
     const totalLoads = parseLoads(updated[index].loads);
     const sobrante = parseFloat(updated[index].endValue) || 0;
-    updated[index].realQty = Math.max(0, totalLoads - sobrante);
+    updated[index].realQty = totalLoads - sobrante;
     
     setPrintingColors(updated);
   };
@@ -110,7 +122,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
       type: activeTab,
       realMeters: realMeters ? parseFloat(realMeters) : undefined,
       consumptions: activeTab === 'PRINTING' 
-        ? printingColors.filter(c => c.realQty > 0 || c.loads).map(c => ({
+        ? printingColors.filter(c => c.realQty !== 0 || c.loads).map(c => ({
             colorId: c.id,
             colorName: c.colorName,
             supplyId: c.supplyId,
@@ -119,7 +131,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
             realQty: c.realQty,
             unit: 'kg'
           }))
-        : laminationSupplies.filter(c => c.realQty > 0 || c.loads).map(c => ({
+        : laminationSupplies.filter(c => c.realQty !== 0 || c.loads).map(c => ({
             colorName: c.name,
             supplyId: c.supplyId,
             loads: c.loads,
@@ -205,6 +217,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
               <th style={{ padding: '0.75rem' }}>Cargas (ej. 25+20)</th>
               <th style={{ padding: '0.75rem' }}>Diferencia / Fin</th>
               <th style={{ padding: '0.75rem', textAlign: 'right' }}>Consumo Real</th>
+              <th style={{ padding: '0.75rem', textAlign: 'right' }}>Calculo</th>
               <th style={{ padding: '0.75rem', width: '50px' }}></th>
             </tr>
           </thead>
@@ -261,8 +274,11 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
                     style={{ width: '100px', padding: '0.6rem', fontSize: '0.9rem', backgroundColor: 'rgba(0,0,0,0.2)' }}
                   />
                 </td>
-                <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 800, color: 'var(--primary)', fontSize: '1.2rem' }}>
+                <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 800, color: item.realQty < 0 ? 'var(--success)' : 'var(--primary)', fontSize: '1.2rem' }}>
                   {item.realQty} <span style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>kg</span>
+                </td>
+                <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 700, color: 'var(--text-muted)' }}>
+                  {formatConsumptionCost(item)}
                 </td>
                 <td style={{ padding: '0.75rem', textAlign: 'center' }}>
                   <button 
@@ -326,7 +342,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
       
       {success && standalone && (
         <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', borderRadius: '8px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
-          <CheckCircle2 size={20} /> Cantidades descontadas del inventario correctamente.
+          <CheckCircle2 size={20} /> Inventario actualizado correctamente.
         </div>
       )}
     </div>

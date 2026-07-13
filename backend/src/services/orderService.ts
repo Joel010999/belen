@@ -29,17 +29,11 @@ const ensureAdmin = (actor?: ActorContext) => {
   }
 };
 
-const ensureOrderEditor = (actor?: ActorContext) => {
-  const role = normalizeRole(actor?.role);
-  if (role !== 'ADMIN' && role !== 'MACHINE') {
-    throw new Error('No tenes permisos para editar esta orden');
-  }
-};
-
 const PROCESS_TYPE_LABELS: Record<string, string> = {
   IMPRESION: 'Impresion',
   LAMINACION: 'Laminacion',
-  REFILADO: 'Refilado'
+  REFILADO: 'Refilado',
+  CONFECCION: 'Confeccion'
 };
 
 const CONSUMPTION_TYPE_TO_PROCESS_TYPE: Record<string, string> = {
@@ -54,7 +48,7 @@ const TRANSACTION_OPTIONS = {
 
 const getLatestProcessByType = (processes: any[] = [], type: string) =>
   processes
-    .filter((process) => process.type === type)
+    .filter((process) => process.type === type && process.status !== 'Planificada')
     .sort((a, b) => new Date(b.updatedAt || b.endTime || b.startTime || 0).getTime() - new Date(a.updatedAt || a.endTime || a.startTime || 0).getTime())[0];
 
 const enrichOrderOperationalState = (order: any) => {
@@ -63,21 +57,36 @@ const enrichOrderOperationalState = (order: any) => {
   const latestPrinting = getLatestProcessByType(processes, 'IMPRESION');
   const latestLamination = getLatestProcessByType(processes, 'LAMINACION');
   const latestRefilado = getLatestProcessByType(processes, 'REFILADO');
+  const latestConfeccion = getLatestProcessByType(processes, 'CONFECCION');
 
   let operationalStatus = 'PLANIFICADA';
   let currentStage: string | null = null;
 
   if (order.status === 'Finalizadas') {
     operationalStatus = 'FINALIZADA';
-  } else if (order.approvedRefilado) {
+  } else if (order.approvedConfeccion) {
     operationalStatus = 'PENDIENTE_CONTROL';
-    currentStage = 'REFILADO';
+    currentStage = 'CONFECCION';
+  } else if (latestConfeccion) {
+    currentStage = 'CONFECCION';
+    operationalStatus = latestConfeccion.status === 'finalizado' ? 'CONFECCION_COMPLETA' : 'EN_CONFECCION';
+  } else if (order.approvedRefilado) {
+    operationalStatus = plannedTypes.has('CONFECCION') ? 'PENDIENTE_CONFECCION' : 'PENDIENTE_CONTROL';
+    currentStage = plannedTypes.has('CONFECCION') ? 'CONFECCION' : 'REFILADO';
   } else if (latestRefilado) {
     currentStage = 'REFILADO';
     operationalStatus = latestRefilado.status === 'finalizado' ? 'REFILADO_COMPLETO' : 'EN_REFILADO';
   } else if (order.approvedLamination) {
-    operationalStatus = plannedTypes.has('REFILADO') ? 'PENDIENTE_REFILADO' : 'PENDIENTE_CONTROL';
-    currentStage = plannedTypes.has('REFILADO') ? 'REFILADO' : 'LAMINACION';
+    if (plannedTypes.has('REFILADO')) {
+      operationalStatus = 'PENDIENTE_REFILADO';
+      currentStage = 'REFILADO';
+    } else if (plannedTypes.has('CONFECCION')) {
+      operationalStatus = 'PENDIENTE_CONFECCION';
+      currentStage = 'CONFECCION';
+    } else {
+      operationalStatus = 'PENDIENTE_CONTROL';
+      currentStage = 'LAMINACION';
+    }
   } else if (latestLamination) {
     currentStage = 'LAMINACION';
     operationalStatus = latestLamination.status === 'finalizado' ? 'LAMINACION_COMPLETA' : 'EN_LAMINACION';
@@ -88,6 +97,9 @@ const enrichOrderOperationalState = (order: any) => {
     } else if (plannedTypes.has('REFILADO')) {
       operationalStatus = 'PENDIENTE_REFILADO';
       currentStage = 'REFILADO';
+    } else if (plannedTypes.has('CONFECCION')) {
+      operationalStatus = 'PENDIENTE_CONFECCION';
+      currentStage = 'CONFECCION';
     } else {
       operationalStatus = 'PENDIENTE_CONTROL';
       currentStage = 'IMPRESION';
@@ -98,6 +110,15 @@ const enrichOrderOperationalState = (order: any) => {
   } else if (plannedTypes.has('IMPRESION')) {
     operationalStatus = 'PENDIENTE_IMPRESION';
     currentStage = 'IMPRESION';
+  } else if (plannedTypes.has('LAMINACION')) {
+    operationalStatus = 'PENDIENTE_LAMINACION';
+    currentStage = 'LAMINACION';
+  } else if (plannedTypes.has('REFILADO')) {
+    operationalStatus = 'PENDIENTE_REFILADO';
+    currentStage = 'REFILADO';
+  } else if (plannedTypes.has('CONFECCION')) {
+    operationalStatus = 'PENDIENTE_CONFECCION';
+    currentStage = 'CONFECCION';
   }
 
   return {
@@ -368,7 +389,7 @@ export const getOrderById = async (id: number) => {
           operator: true,
           printingData: true,
           laminationData: true,
-          refiladoData: true,
+          refiladoData: { include: { outputBobbins: true } },
           materialLots: true,
           timeLogs: {
             include: {
@@ -430,7 +451,7 @@ export const createProcess = async (processData: any) => {
       });
     }
 
-    // Save Material Lots if provided (Printing and Lamination)
+    // Save bobbins/lots used by the operator in any plant stage.
     if (processData.materialLots && Array.isArray(processData.materialLots)) {
       for (const lot of processData.materialLots) {
         const initial = parseFloat(lot.initialMeters) || 0;
@@ -514,7 +535,7 @@ export const createProcess = async (processData: any) => {
         }
       });
     } else if (type === 'REFILADO' && specificData) {
-      await tx.processRefilado.create({
+      const refilado = await tx.processRefilado.create({
         data: {
           processId: process.id,
           exitSense: specificData.exitSense,
@@ -527,6 +548,21 @@ export const createProcess = async (processData: any) => {
           coilCount: specificData.coilCount ? parseInt(specificData.coilCount) : null,
         }
       });
+
+      const outputBobbins = Array.isArray(specificData.outputBobbins) ? specificData.outputBobbins : [];
+      for (const bobbin of outputBobbins) {
+        const kg = parseFloat(bobbin.kg);
+        if (!bobbin.label || isNaN(kg)) continue;
+
+        await tx.refiladoOutputBobbin.create({
+          data: {
+            refiladoId: refilado.id,
+            label: bobbin.label,
+            kg,
+            notes: bobbin.notes || null
+          }
+        });
+      }
     }
 
     return process;
@@ -562,7 +598,7 @@ export const getDashboardStats = async (machineId?: number) => {
         materialLots: true,
         printingData: true,
         laminationData: true,
-        refiladoData: true
+        refiladoData: { include: { outputBobbins: true } }
       }
     }),
     prisma.productionOrder.findMany({
@@ -746,7 +782,7 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
           materialLots: true,
           printingData: true,
           laminationData: true,
-          refiladoData: true
+          refiladoData: { include: { outputBobbins: true } }
         }
       }
     },
@@ -859,7 +895,7 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
 };
 
 export const updateOrder = async (id: number, orderData: any, actor?: ActorContext) => {
-  ensureOrderEditor(actor);
+  ensureAdmin(actor);
 
   const { 
     orderNumber, clientId, productId, plannedQty, unit, products,
@@ -892,6 +928,7 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
     if (orderData.approvedPrinting !== undefined) dataToUpdate.approvedPrinting = orderData.approvedPrinting;
     if (orderData.approvedLamination !== undefined) dataToUpdate.approvedLamination = orderData.approvedLamination;
     if (orderData.approvedRefilado !== undefined) dataToUpdate.approvedRefilado = orderData.approvedRefilado;
+    if (orderData.approvedConfeccion !== undefined) dataToUpdate.approvedConfeccion = orderData.approvedConfeccion;
 
       const order = await tx.productionOrder.update({
         where: { id },
@@ -1139,7 +1176,7 @@ export const saveProcessTimeLog = async (data: any) => {
   }
 
   const process = await prisma.productionProcess.findFirst({
-    where: { orderId: parseInt(orderId), type: stage },
+    where: { orderId: parseInt(orderId), type: stage, status: { not: 'Planificada' } },
     orderBy: { id: 'desc' }
   });
 
@@ -1227,16 +1264,27 @@ export const registerConsumptions = async (orderId: number, data: any) => {
       }
 
       if (cons.supplyId) {
+        const supplyId = parseInt(cons.supplyId);
+        if (isNaN(supplyId)) continue;
+
+        const realQty = parseFloat(cons.realQty) || 0;
+        const stockQty = type === 'PRINTING' ? realQty : Math.max(0, realQty);
+        const supply = await tx.supply.findUnique({ where: { id: supplyId } });
+        const unitPrice = supply?.price ?? null;
+        const calculatedCost = unitPrice !== null ? realQty * unitPrice : null;
+
         // Upsert Consumption record
         const existingCons = await tx.consumption.findFirst({
-          where: { orderId, supplyId: cons.supplyId }
+          where: { orderId, supplyId }
         });
 
         if (existingCons) {
           await tx.consumption.update({
             where: { id: existingCons.id },
             data: {
-              realQty: (existingCons.realQty || 0) + parseFloat(cons.realQty),
+              realQty: (existingCons.realQty || 0) + realQty,
+              unitPrice: unitPrice ?? existingCons.unitPrice,
+              calculatedCost: calculatedCost !== null ? (existingCons.calculatedCost || 0) + calculatedCost : existingCons.calculatedCost,
               observations: cons.loads ? `Cargas: ${cons.loads} | Sobrante: ${cons.endValue}` : undefined
             }
           });
@@ -1244,11 +1292,13 @@ export const registerConsumptions = async (orderId: number, data: any) => {
           await tx.consumption.create({
             data: {
               orderId,
-              supplyId: cons.supplyId,
+              supplyId,
               plannedQty: cons.plannedQty ? parseFloat(cons.plannedQty) : 0,
-              realQty: parseFloat(cons.realQty),
+              realQty,
               unit: cons.unit || 'kg',
               type: type,
+              unitPrice,
+              calculatedCost,
               observations: cons.loads ? `Cargas: ${cons.loads} | Sobrante: ${cons.endValue}` : undefined
             }
           });
@@ -1256,31 +1306,35 @@ export const registerConsumptions = async (orderId: number, data: any) => {
 
         // Deduct from Stock
         const currentStock = await tx.currentStock.findUnique({
-          where: { supplyId: cons.supplyId }
+          where: { supplyId }
         });
 
-        if (currentStock) {
+        if (currentStock && stockQty !== 0) {
+          const isReturn = stockQty < 0;
+
           await tx.currentStock.update({
             where: { id: currentStock.id },
             data: {
-              stockActual: currentStock.stockActual - parseFloat(cons.realQty),
+              stockActual: currentStock.stockActual - stockQty,
               lastUpdate: new Date(),
-              updateSource: `Consumo Orden #${orderId}`
+              updateSource: `${isReturn ? 'Devolucion' : 'Consumo'} Orden #${orderId}`
             }
           });
 
           // Create StockMovement
           await tx.stockMovement.create({
             data: {
-              type: 'Consumo Producción',
+              type: isReturn ? 'Devolucion Produccion' : 'Consumo Produccion',
               source: `Orden #${orderId}`,
               orderId,
               itemType: 'supply',
-              supplyId: cons.supplyId,
-              qty: parseFloat(cons.realQty),
+              supplyId,
+              qty: Math.abs(stockQty),
               unit: cons.unit || 'kg',
-              sign: -1,
-              observations: `Consumo reportado por operarios de ${type}`,
+              sign: isReturn ? 1 : -1,
+              observations: isReturn
+                ? `Sobrante devuelto por operarios de ${type}`
+                : `Consumo reportado por operarios de ${type}`,
               pendingExport: true,
               exported: false
             }

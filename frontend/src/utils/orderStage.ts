@@ -4,7 +4,7 @@ export const getOrderOperationalStatus = (order: any) => {
 
   const latestByType = (type: string) =>
     processes
-      .filter((process: any) => process.type === type)
+      .filter((process: any) => process.type === type && process.status !== 'Planificada')
       .sort((a: any, b: any) => {
         const left = new Date(b.updatedAt || b.endTime || b.startTime || 0).getTime();
         const right = new Date(a.updatedAt || a.endTime || a.startTime || 0).getTime();
@@ -14,21 +14,36 @@ export const getOrderOperationalStatus = (order: any) => {
   const latestPrinting = latestByType('IMPRESION');
   const latestLamination = latestByType('LAMINACION');
   const latestRefilado = latestByType('REFILADO');
+  const latestConfeccion = latestByType('CONFECCION');
 
   let operationalStatus = 'PLANIFICADA';
   let currentStage: string | null = null;
 
   if (order?.status === 'Finalizadas') {
     operationalStatus = 'FINALIZADA';
-  } else if (order?.approvedRefilado) {
+  } else if (order?.approvedConfeccion) {
     operationalStatus = 'PENDIENTE_CONTROL';
-    currentStage = 'REFILADO';
+    currentStage = 'CONFECCION';
+  } else if (latestConfeccion) {
+    operationalStatus = latestConfeccion.status === 'finalizado' ? 'CONFECCION_COMPLETA' : 'EN_CONFECCION';
+    currentStage = 'CONFECCION';
+  } else if (order?.approvedRefilado) {
+    operationalStatus = plannedTypes.has('CONFECCION') ? 'PENDIENTE_CONFECCION' : 'PENDIENTE_CONTROL';
+    currentStage = plannedTypes.has('CONFECCION') ? 'CONFECCION' : 'REFILADO';
   } else if (latestRefilado) {
     operationalStatus = latestRefilado.status === 'finalizado' ? 'REFILADO_COMPLETO' : 'EN_REFILADO';
     currentStage = 'REFILADO';
   } else if (order?.approvedLamination) {
-    operationalStatus = plannedTypes.has('REFILADO') ? 'PENDIENTE_REFILADO' : 'PENDIENTE_CONTROL';
-    currentStage = plannedTypes.has('REFILADO') ? 'REFILADO' : 'LAMINACION';
+    if (plannedTypes.has('REFILADO')) {
+      operationalStatus = 'PENDIENTE_REFILADO';
+      currentStage = 'REFILADO';
+    } else if (plannedTypes.has('CONFECCION')) {
+      operationalStatus = 'PENDIENTE_CONFECCION';
+      currentStage = 'CONFECCION';
+    } else {
+      operationalStatus = 'PENDIENTE_CONTROL';
+      currentStage = 'LAMINACION';
+    }
   } else if (latestLamination) {
     operationalStatus = latestLamination.status === 'finalizado' ? 'LAMINACION_COMPLETA' : 'EN_LAMINACION';
     currentStage = 'LAMINACION';
@@ -39,6 +54,9 @@ export const getOrderOperationalStatus = (order: any) => {
     } else if (plannedTypes.has('REFILADO')) {
       operationalStatus = 'PENDIENTE_REFILADO';
       currentStage = 'REFILADO';
+    } else if (plannedTypes.has('CONFECCION')) {
+      operationalStatus = 'PENDIENTE_CONFECCION';
+      currentStage = 'CONFECCION';
     } else {
       operationalStatus = 'PENDIENTE_CONTROL';
       currentStage = 'IMPRESION';
@@ -49,6 +67,15 @@ export const getOrderOperationalStatus = (order: any) => {
   } else if (plannedTypes.has('IMPRESION')) {
     operationalStatus = 'PENDIENTE_IMPRESION';
     currentStage = 'IMPRESION';
+  } else if (plannedTypes.has('LAMINACION')) {
+    operationalStatus = 'PENDIENTE_LAMINACION';
+    currentStage = 'LAMINACION';
+  } else if (plannedTypes.has('REFILADO')) {
+    operationalStatus = 'PENDIENTE_REFILADO';
+    currentStage = 'REFILADO';
+  } else if (plannedTypes.has('CONFECCION')) {
+    operationalStatus = 'PENDIENTE_CONFECCION';
+    currentStage = 'CONFECCION';
   }
 
   return { operationalStatus, currentStage };
@@ -66,6 +93,9 @@ export const getOperationalStatusLabel = (status: string) => {
     PENDIENTE_REFILADO: 'Pendiente Refilado',
     EN_REFILADO: 'En Refilado',
     REFILADO_COMPLETO: 'Refilado Completo',
+    PENDIENTE_CONFECCION: 'Pendiente Confeccion',
+    EN_CONFECCION: 'En Confeccion',
+    CONFECCION_COMPLETA: 'Confeccion Completa',
     PENDIENTE_CONTROL: 'Pendiente Control',
     FINALIZADA: 'Finalizada'
   };
@@ -77,5 +107,6 @@ export const getStageLabel = (stage: string | null) => {
   if (stage === 'IMPRESION') return 'Impresion';
   if (stage === 'LAMINACION') return 'Laminacion';
   if (stage === 'REFILADO') return 'Refilado';
+  if (stage === 'CONFECCION') return 'Confeccion';
   return '-';
 };

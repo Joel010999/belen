@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
   engineType = "library"
 }
 
@@ -18,15 +18,16 @@ model Client {
 }
 
 model Product {
-  id          Int               @id @default(autoincrement())
-  code        String            @unique
-  name        String
-  description String?
-  unit        String
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  stock       CurrentStock?
-  orders      ProductionOrder[]
+  id            Int               @id @default(autoincrement())
+  code          String            @unique
+  name          String
+  description   String?
+  unit          String
+  price         Float?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  stock         CurrentStock?
+  orders        ProductionOrder[]
   orderProducts OrderProduct[]
 }
 
@@ -36,6 +37,7 @@ model Supply {
   name         String
   type         String
   unit         String
+  price        Float?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   consumptions Consumption[]
@@ -43,51 +45,52 @@ model Supply {
 }
 
 model ProductionOrder {
-  id             Int                 @id @default(autoincrement())
-  orderNumber    String              @unique
-  date           DateTime            @default(now())
-  clientId       Int
-  productId      Int?
-  sampleId       Int?
-  classification String?
-  workType       String?
-  hasSample      Boolean             @default(false)
-  estimatedBagQty Int?
-  plannedQty     String?
-  producedQty    Float               @default(0)
-  unit           String
-  deliveryDate   DateTime
-  priority       Int                 @default(1)
-  status         String              @default("Órdenes por realizar")
-  observations   String?
-  specifications String?
-  approvedPrinting   Boolean         @default(false)
-  approvedLamination Boolean         @default(false)
-  approvedRefilado   Boolean         @default(false)
-  creatorId      Int
-  machineId      Int?
-  operatorsText  String?
-  closedAt       DateTime?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  attachments    Attachment[]
-  colorOrders    ColorOrder[]
-  consumptions   Consumption[]
-  finalControl   FinalControl?
-  user           User                @relation(fields: [creatorId], references: [id])
-  machine        Machine?            @relation("CreatedOnMachine", fields: [machineId], references: [id])
-  operators      OrderOperator[]
-  sample         Sample?             @relation(fields: [sampleId], references: [id])
-  product        Product?            @relation(fields: [productId], references: [id])
-  client         Client              @relation(fields: [clientId], references: [id])
-  processes      ProductionProcess[]
-  result         ProductionResult?
-  stockMovements StockMovement[]
-  technicalSpec  TechnicalSpec?
-  
-  products       OrderProduct[]
-  checklists     ProcessChecklist[]
-  qualityControls QualityControl[]
+  id                 Int                 @id @default(autoincrement())
+  orderNumber        String              @unique
+  date               DateTime            @default(now())
+  clientId           Int
+  productId          Int?
+  sampleId           Int?
+  classification     String?
+  workType           String?
+  hasSample          Boolean             @default(false)
+  estimatedBagQty    Int?
+  plannedQty         String?
+  producedQty        Float               @default(0)
+  unit               String
+  deliveryDate       DateTime
+  priority           Int                 @default(1)
+  status             String              @default("Órdenes por realizar")
+  observations       String?
+  specifications     String?
+  approvedPrinting   Boolean             @default(false)
+  approvedLamination Boolean             @default(false)
+  approvedRefilado   Boolean             @default(false)
+  approvedConfeccion Boolean             @default(false)
+  creatorId          Int
+  machineId          Int?
+  operatorsText      String?
+  closedAt           DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  attachments        Attachment[]
+  colorOrders        ColorOrder[]
+  consumptions       Consumption[]
+  finalControl       FinalControl?
+  user               User                @relation(fields: [creatorId], references: [id])
+  machine            Machine?            @relation("CreatedOnMachine", fields: [machineId], references: [id])
+  operators          OrderOperator[]
+  sample             Sample?             @relation(fields: [sampleId], references: [id])
+  product            Product?            @relation(fields: [productId], references: [id])
+  client             Client              @relation(fields: [clientId], references: [id])
+  processes          ProductionProcess[]
+  result             ProductionResult?
+  stockMovements     StockMovement[]
+  technicalSpec      TechnicalSpec?
+
+  products         OrderProduct[]
+  checklists       ProcessChecklist[]
+  qualityControls  QualityControl[]
   finalInspections FinalInspection[]
 }
 
@@ -122,12 +125,12 @@ model TechnicalSpec {
 }
 
 model ColorOrder {
-  id           Int             @id @default(autoincrement())
-  orderId      Int
-  sequence     Int
-  colorName    String
-  lotNumber    String?
-  supplyId     Int?
+  id                Int             @id @default(autoincrement())
+  orderId           Int
+  sequence          Int
+  colorName         String
+  lotNumber         String?
+  supplyId          Int?
   formula           String?
   observations      String?
   changesToConsider String?
@@ -135,16 +138,18 @@ model ColorOrder {
 }
 
 model Consumption {
-  id           Int             @id @default(autoincrement())
-  orderId      Int
-  supplyId     Int
-  plannedQty   Float
-  realQty      Float           @default(0)
-  unit         String
-  type         String
-  observations String?
-  supply       Supply          @relation(fields: [supplyId], references: [id])
-  order        ProductionOrder @relation(fields: [orderId], references: [id])
+  id             Int             @id @default(autoincrement())
+  orderId        Int
+  supplyId       Int
+  plannedQty     Float
+  realQty        Float           @default(0)
+  unit           String
+  type           String
+  unitPrice      Float?
+  calculatedCost Float?
+  observations   String?
+  supply         Supply          @relation(fields: [supplyId], references: [id])
+  order          ProductionOrder @relation(fields: [orderId], references: [id])
 }
 
 model ProductionProcess {
@@ -229,8 +234,8 @@ model ProcessLamination {
 }
 
 model ProcessRefilado {
-  id              Int               @id @default(autoincrement())
-  processId       Int               @unique
+  id              Int                    @id @default(autoincrement())
+  processId       Int                    @unique
   exitSense       String?
   tacaRight       String?
   tacaLeft        String?
@@ -239,7 +244,18 @@ model ProcessRefilado {
   coilDiameter    Float?
   processedMeters Float?
   coilCount       Int?
-  process         ProductionProcess @relation(fields: [processId], references: [id])
+  process         ProductionProcess      @relation(fields: [processId], references: [id])
+  outputBobbins   RefiladoOutputBobbin[]
+}
+
+model RefiladoOutputBobbin {
+  id         Int             @id @default(autoincrement())
+  refiladoId Int
+  label      String
+  kg         Float
+  notes      String?
+  createdAt  DateTime        @default(now())
+  refilado   ProcessRefilado @relation(fields: [refiladoId], references: [id], onDelete: Cascade)
 }
 
 model FinalControl {
@@ -346,37 +362,37 @@ model ExportBatch {
 }
 
 model User {
-  id            Int               @id @default(autoincrement())
-  username      String            @unique
-  passwordHash  String
-  name          String
-  email         String?
-  role          String
-  operatorId    Int?              @unique
-  machineId     Int?              @unique
-  active        Boolean           @default(true)
-  attachments   Attachment[]
-  exportBatches ExportBatch[]
-  importLogs    ImportLog[]
-  ordersCreated ProductionOrder[]
+  id               Int               @id @default(autoincrement())
+  username         String            @unique
+  passwordHash     String
+  name             String
+  email            String?
+  role             String
+  operatorId       Int?              @unique
+  machineId        Int?              @unique
+  active           Boolean           @default(true)
+  attachments      Attachment[]
+  exportBatches    ExportBatch[]
+  importLogs       ImportLog[]
+  ordersCreated    ProductionOrder[]
   finalInspections FinalInspection[] @relation("FinalInspectionInspector")
-  operator      Operator?         @relation(fields: [operatorId], references: [id])
-  machine       Machine?          @relation(fields: [machineId], references: [id])
+  operator         Operator?         @relation(fields: [operatorId], references: [id])
+  machine          Machine?          @relation(fields: [machineId], references: [id])
 }
 
 model Operator {
-  id        Int                 @id @default(autoincrement())
-  legajo    String              @unique
-  firstName String
-  lastName  String
-  role      String
-  active    Boolean             @default(true)
-  controls  FinalControl[]
-  processes ProductionProcess[]
-  orders    OrderOperator[]
+  id         Int                 @id @default(autoincrement())
+  legajo     String              @unique
+  firstName  String
+  lastName   String
+  role       String
+  active     Boolean             @default(true)
+  controls   FinalControl[]
+  processes  ProductionProcess[]
+  orders     OrderOperator[]
   checklists ProcessChecklist[]
-  timeLogs  ProcessTimeLog[]
-  user      User?
+  timeLogs   ProcessTimeLog[]
+  user       User?
 }
 
 model Machine {
@@ -421,44 +437,44 @@ model Attachment {
 }
 
 model OrderProduct {
-  id           Int             @id @default(autoincrement())
-  orderId      Int
-  productId    Int
-  plannedQty   String 
-  order        ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product      Product         @relation(fields: [productId], references: [id])
+  id         Int             @id @default(autoincrement())
+  orderId    Int
+  productId  Int
+  plannedQty String
+  order      ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product         @relation(fields: [productId], references: [id])
 }
 
 model ProcessChecklist {
-  id         Int             @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   orderId    Int
-  stage      String          
-  date       DateTime        @default(now())
+  stage      String
+  date       DateTime @default(now())
   operatorId Int
-  
-  order      ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  operator   Operator        @relation(fields: [operatorId], references: [id])
-  items      ProcessChecklistItem[]
+
+  order    ProductionOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  operator Operator               @relation(fields: [operatorId], references: [id])
+  items    ProcessChecklistItem[]
 }
 
 model ProcessChecklistItem {
   id          Int              @id @default(autoincrement())
   checklistId Int
-  time        String           
-  controlName String           
+  time        String
+  controlName String
   checked     Boolean          @default(false)
   value       String?
   checklist   ProcessChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
 }
 
 model QualityControl {
-  id          Int             @id @default(autoincrement())
-  orderId     Int
-  stage       String
-  date        DateTime        @default(now())
-  data        String          // JSON string storing specific fields for Impresión, Laminación or Refilación
-  
-  order       ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id      Int      @id @default(autoincrement())
+  orderId Int
+  stage   String
+  date    DateTime @default(now())
+  data    String // JSON string storing specific fields for Impresión, Laminación or Refilación
+
+  order ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 model FinalInspection {
@@ -479,11 +495,11 @@ model FinalInspection {
 }
 
 model SystemAuditLog {
-  id        Int      @id @default(autoincrement())
-  date      DateTime @default(now())
-  userId    Int?
-  userStr   String?  // Name or role if userId is not directly known
-  action    String   // e.g. "CREATE", "UPDATE", "DELETE", "LOGIN"
-  entity    String   // e.g. "ProductionOrder", "User", "CurrentStock"
-  details   String?  @db.Text // JSON string or descriptive text with payload/changes
+  id      Int      @id @default(autoincrement())
+  date    DateTime @default(now())
+  userId  Int?
+  userStr String? // Name or role if userId is not directly known
+  action  String // e.g. "CREATE", "UPDATE", "DELETE", "LOGIN"
+  entity  String // e.g. "ProductionOrder", "User", "CurrentStock"
+  details String?  @db.Text // JSON string or descriptive text with payload/changes
 }

@@ -1,17 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
-import { Play, Save, Layers, Droplets, Scissors, AlertTriangle, TimerReset } from 'lucide-react';
+import { Play, Save, Layers, Droplets, Scissors, AlertTriangle, TimerReset, PackageCheck, Plus, Trash2 } from 'lucide-react';
 import { FormSection } from '../components/FormSection';
 import { OrderConsumptions } from '../components/OrderConsumptions';
 import { useAuth } from '../hooks/useAuth';
 import type { LucideIcon } from 'lucide-react';
 
-type StageType = 'IMPRESION' | 'LAMINACION' | 'REFILADO';
+type StageType = 'IMPRESION' | 'LAMINACION' | 'REFILADO' | 'CONFECCION';
 
 const STAGES: { key: StageType; label: string; icon: LucideIcon }[] = [
   { key: 'IMPRESION', label: 'Impresion', icon: Layers },
   { key: 'LAMINACION', label: 'Laminacion', icon: Droplets },
-  { key: 'REFILADO', label: 'Refilado', icon: Scissors }
+  { key: 'REFILADO', label: 'Refilado', icon: Scissors },
+  { key: 'CONFECCION', label: 'Confeccion', icon: PackageCheck }
 ];
 
 const createInitialStageData = () => ({
@@ -30,6 +31,21 @@ const createInitialStageData = () => ({
   deTripa: false
 });
 
+const createInitialMaterialLot = () => ({
+  lotNumber: '',
+  kg: '',
+  initialMeters: '',
+  addedMeters: '',
+  finalMeters: '',
+  observations: ''
+});
+
+const createInitialOutputBobbin = (index = 1) => ({
+  label: `Bobina ${index}`,
+  kg: '',
+  notes: ''
+});
+
 export const ProductionProcess: React.FC = () => {
   const { user } = useAuth();
   const [activeStage, setActiveStage] = useState<StageType>('IMPRESION');
@@ -44,6 +60,8 @@ export const ProductionProcess: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [processSuccess, setProcessSuccess] = useState<string | null>(null);
   const [stageData, setStageData] = useState(createInitialStageData());
+  const [materialLots, setMaterialLots] = useState([createInitialMaterialLot()]);
+  const [refiladoOutputBobbins, setRefiladoOutputBobbins] = useState([createInitialOutputBobbin()]);
   const [timeLogData, setTimeLogData] = useState({
     operatorId: '',
     date: new Date().toISOString().split('T')[0],
@@ -112,6 +130,8 @@ export const ProductionProcess: React.FC = () => {
         : ''
     }));
     setProcessSuccess(null);
+    setMaterialLots([createInitialMaterialLot()]);
+    setRefiladoOutputBobbins([createInitialOutputBobbin()]);
     setTimeLogData({
       operatorId: '',
       date: new Date().toISOString().split('T')[0],
@@ -141,6 +161,36 @@ export const ProductionProcess: React.FC = () => {
     setTimeLogData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const updateMaterialLot = (index: number, field: string, value: string) => {
+    setMaterialLots((prev) => prev.map((lot, lotIndex) => lotIndex === index ? { ...lot, [field]: value } : lot));
+  };
+
+  const addMaterialLot = () => {
+    setMaterialLots((prev) => [...prev, createInitialMaterialLot()]);
+  };
+
+  const removeMaterialLot = (index: number) => {
+    setMaterialLots((prev) => prev.length === 1 ? [createInitialMaterialLot()] : prev.filter((_, lotIndex) => lotIndex !== index));
+  };
+
+  const updateOutputBobbin = (index: number, field: string, value: string) => {
+    setRefiladoOutputBobbins((prev) => prev.map((bobbin, bobbinIndex) => bobbinIndex === index ? { ...bobbin, [field]: value } : bobbin));
+  };
+
+  const addOutputBobbin = () => {
+    setRefiladoOutputBobbins((prev) => [...prev, createInitialOutputBobbin(prev.length + 1)]);
+  };
+
+  const removeOutputBobbin = (index: number) => {
+    setRefiladoOutputBobbins((prev) => (
+      prev.length === 1 ? [createInitialOutputBobbin()] : prev.filter((_, bobbinIndex) => bobbinIndex !== index)
+    ));
+  };
+
+  const totalOutputKg = useMemo(() => (
+    refiladoOutputBobbins.reduce((acc, bobbin) => acc + (parseFloat(bobbin.kg) || 0), 0)
+  ), [refiladoOutputBobbins]);
+
   const handleSaveProcess = async () => {
     if (!selectedOrderId) {
       setError('Seleccione una orden antes de registrar la etapa.');
@@ -167,6 +217,21 @@ export const ProductionProcess: React.FC = () => {
         specificData: {}
       };
 
+      const lotsToSave = materialLots
+        .filter((lot) => lot.lotNumber.trim())
+        .map((lot) => ({
+          lotNumber: lot.lotNumber.trim(),
+          kg: lot.kg || 0,
+          initialMeters: lot.initialMeters || 0,
+          addedMeters: lot.addedMeters || 0,
+          finalMeters: lot.finalMeters || 0,
+          observations: lot.observations || undefined
+        }));
+
+      if (lotsToSave.length > 0) {
+        payload.materialLots = lotsToSave;
+      }
+
       if (activeStage === 'IMPRESION') {
         payload.specificData = {
           exitSense: stageData.exitSense || undefined,
@@ -192,14 +257,25 @@ export const ProductionProcess: React.FC = () => {
           deTripa: stageData.deTripa,
           coilDiameter: stageData.coilDiameter || undefined,
           processedMeters: stageData.processedMeters || undefined,
-          coilCount: stageData.coilCount || undefined
+          coilCount: stageData.coilCount || undefined,
+          outputBobbins: refiladoOutputBobbins
+            .filter((bobbin) => bobbin.kg)
+            .map((bobbin, index) => ({
+              label: bobbin.label.trim() || `Bobina ${index + 1}`,
+              kg: bobbin.kg || 0,
+              notes: bobbin.notes || undefined
+            }))
         };
       }
 
       await api.post('/orders/processes', payload);
       await fetchSelectedOrder(selectedOrderId);
       await fetchOrders();
-      setProcessSuccess(`Etapa ${activeStage.toLowerCase()} registrada. Si ahora confirmas consumos, el stock se descuenta en el momento.`);
+      setProcessSuccess(
+        canUseConsumptions
+          ? `Etapa ${activeStage.toLowerCase()} registrada. Si ahora confirmas consumos, el stock se actualiza en el momento.`
+          : `Etapa ${activeStage.toLowerCase()} registrada correctamente.`
+      );
     } catch (err: any) {
       console.error(err);
       setError(err.response?.data?.error || 'No se pudo registrar el avance de la etapa.');
@@ -461,6 +537,134 @@ export const ProductionProcess: React.FC = () => {
                 </>
               )}
             </div>
+
+            <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+                <div>
+                  <h4 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Lotes / bobinas usadas</h4>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                    Numero de lote o bobina que carga el operario al iniciar o continuar la etapa.
+                  </p>
+                </div>
+                <button type="button" className="btn" onClick={addMaterialLot} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <Plus size={16} />
+                  Agregar lote
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gap: '0.85rem' }}>
+                {materialLots.map((lot, index) => (
+                  <div key={index} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem', alignItems: 'end' }}>
+                    <div>
+                      <label className="label">Lote / bobina</label>
+                      <input
+                        value={lot.lotNumber}
+                        onChange={(e) => updateMaterialLot(index, 'lotNumber', e.target.value)}
+                        className="input"
+                        placeholder={`Bobina ${index + 1}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Kg</label>
+                      <input
+                        value={lot.kg}
+                        onChange={(e) => updateMaterialLot(index, 'kg', e.target.value)}
+                        type="number"
+                        className="input"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Metros usados</label>
+                      <input
+                        value={lot.initialMeters}
+                        onChange={(e) => updateMaterialLot(index, 'initialMeters', e.target.value)}
+                        type="number"
+                        className="input"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Observacion</label>
+                      <input
+                        value={lot.observations}
+                        onChange={(e) => updateMaterialLot(index, 'observations', e.target.value)}
+                        className="input"
+                        placeholder="Opcional"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeMaterialLot(index)}
+                      title="Quitar lote"
+                      style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0.65rem' }}
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {activeStage === 'REFILADO' && (
+              <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+                  <div>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Bobinas de salida</h4>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                      Registra cuantos kilos salen por bobina en refilado. Total: <strong>{totalOutputKg.toFixed(2)} kg</strong>
+                    </p>
+                  </div>
+                  <button type="button" className="btn" onClick={addOutputBobbin} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <Plus size={16} />
+                    Agregar bobina
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gap: '0.85rem' }}>
+                  {refiladoOutputBobbins.map((bobbin, index) => (
+                    <div key={index} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem', alignItems: 'end' }}>
+                      <div>
+                        <label className="label">Bobina</label>
+                        <input
+                          value={bobbin.label}
+                          onChange={(e) => updateOutputBobbin(index, 'label', e.target.value)}
+                          className="input"
+                          placeholder={`Bobina ${index + 1}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Kg salida</label>
+                        <input
+                          value={bobbin.kg}
+                          onChange={(e) => updateOutputBobbin(index, 'kg', e.target.value)}
+                          type="number"
+                          className="input"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Nota</label>
+                        <input
+                          value={bobbin.notes}
+                          onChange={(e) => updateOutputBobbin(index, 'notes', e.target.value)}
+                          className="input"
+                          placeholder="Opcional"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeOutputBobbin(index)}
+                        title="Quitar bobina"
+                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0.65rem' }}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div style={{ marginTop: '1.2rem' }}>
               <label className="label">Observaciones operativas / paradas registradas</label>

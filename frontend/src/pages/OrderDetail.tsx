@@ -20,7 +20,8 @@ import { OrderConsumptions } from '../components/OrderConsumptions';
 const STAGES = [
   { value: 'IMPRESION', label: 'Impresion', field: 'approvedPrinting' },
   { value: 'LAMINACION', label: 'Laminacion', field: 'approvedLamination' },
-  { value: 'REFILADO', label: 'Refilado', field: 'approvedRefilado' }
+  { value: 'REFILADO', label: 'Refilado', field: 'approvedRefilado' },
+  { value: 'CONFECCION', label: 'Confeccion', field: 'approvedConfeccion' }
 ];
 
 const DEFAULT_CHECKLIST_ITEMS = [
@@ -233,7 +234,7 @@ export const OrderDetail: React.FC = () => {
               </span>
             </button>
           )}
-          {(user?.role === 'ADMIN' || user?.role === 'MACHINE') && (
+          {user?.role === 'ADMIN' && (
             <Link
               to={`/ordenes/editar/${order.id}`}
               className="btn btn-primary"
@@ -474,7 +475,19 @@ export const OrderDetail: React.FC = () => {
                         {p.materialLots.map((l: any) => (
                           <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
                             <span>Lote: {l.lotNumber}</span>
-                            <span>{l.totalUsedMeters} m</span>
+                            <span>{l.kg || 0} kg / {l.totalUsedMeters} m</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {p.refiladoData?.outputBobbins && p.refiladoData.outputBobbins.length > 0 && (
+                      <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.25rem' }}>Bobinas de salida:</p>
+                        {p.refiladoData.outputBobbins.map((bobbin: any) => (
+                          <div key={bobbin.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
+                            <span>{bobbin.label}</span>
+                            <span>{bobbin.kg} kg</span>
                           </div>
                         ))}
                       </div>

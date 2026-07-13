@@ -14,6 +14,7 @@ async function main() {
     { code: 'M-01', name: 'Impresora Flexográfica 8C', type: 'IMPRESION' },
     { code: 'L-01', name: 'Laminadora Solventless', type: 'LAMINACION' },
     { code: 'R-01', name: 'Refiladora de Alta Velocidad', type: 'REFILADO' },
+    { code: 'C-01', name: 'Confeccionadora', type: 'CONFECCION' },
   ];
 
   const machineRecords = [];
@@ -46,6 +47,7 @@ async function main() {
     { username: 'impresion', name: 'Operario Impresión', machineCode: 'M-01' },
     { username: 'laminacion', name: 'Operario Laminación', machineCode: 'L-01' },
     { username: 'refilado', name: 'Operario Refilado', machineCode: 'R-01' },
+    { username: 'confeccion', name: 'Operario Confeccion', machineCode: 'C-01' },
   ];
 
   for (const mu of machineUsers) {

@@ -7,6 +7,13 @@ import { prisma } from '../index';
 const INSUMO_CODES = ['013434', '002001']; 
 const MATERIAL_CODES = ['021434']; 
 
+const parseImportedPrice = (value?: string) => {
+  const normalized = value?.trim().replace(',', '.');
+  if (!normalized) return null;
+  const parsed = parseFloat(normalized);
+  return isNaN(parsed) ? null : parsed;
+};
+
 export const importClients = async (filePath: string, userId: number) => {
   const results: any[] = [];
   let read = 0, inserted = 0, updated = 0, errors = 0;
@@ -87,6 +94,7 @@ export const importProducts = async (filePath: string, userId: number) => {
             const code = row.code?.trim();
             const name = row.name?.trim();
             const groupCode = row.groupCode?.trim();
+            const price = parseImportedPrice(row.classification);
 
             if (!code || !name) continue;
 
@@ -97,7 +105,7 @@ export const importProducts = async (filePath: string, userId: number) => {
             if (isInsumo || isMaterial) {
               const type = isInsumo ? 'INSUMO' : 'MATERIAL';
               const existing = await prisma.supply.findUnique({ where: { code } });
-              const data = { code, name, type, unit: 'UN' };
+              const data = { code, name, type, unit: 'UN', price };
               let supply;
               if (existing) {
                 supply = await prisma.supply.update({ where: { code }, data });
@@ -115,7 +123,7 @@ export const importProducts = async (filePath: string, userId: number) => {
               });
             } else {
               const existing = await prisma.product.findUnique({ where: { code } });
-              const data = { code, name, unit: 'UN', description: row.group?.trim() };
+              const data = { code, name, unit: 'UN', description: row.group?.trim(), price };
               let product;
               if (existing) {
                 product = await prisma.product.update({ where: { code }, data });

@@ -24,6 +24,12 @@ async function main() {
   const imp1 = await prisma.machine.findUnique({ where: { code: 'IMP1' }});
   const lam1 = await prisma.machine.findUnique({ where: { code: 'LAM1' }});
   const ref1 = await prisma.machine.findUnique({ where: { code: 'REF1' }});
+  let conf1 = await prisma.machine.findFirst({ where: { type: 'CONFECCION' }});
+  if (!conf1) {
+    conf1 = await prisma.machine.create({
+      data: { code: 'CON-01', name: 'Confeccionadora 1', type: 'CONFECCION' }
+    });
+  }
 
   // 2. Ensure basic operators exist
   const operators = [
@@ -79,6 +85,13 @@ async function main() {
       name: 'Terminal Refiladora',
       role: 'MACHINE',
       machineId: ref1.id
+    },
+    {
+      username: 'confeccion',
+      passwordHash: 'planta123',
+      name: 'Terminal Confeccion',
+      role: 'MACHINE',
+      machineId: conf1.id
     }
   ];
 

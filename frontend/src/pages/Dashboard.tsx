@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { SummaryCard } from '../components/SummaryCard';
-import { ClipboardList, AlertCircle, FileCheck, FileOutput, Package, TrendingDown, Layers, Droplets, Scissors } from 'lucide-react';
+import { ClipboardList, AlertCircle, FileCheck, FileOutput, Package, TrendingDown, Layers, Droplets, Scissors, PackageCheck } from 'lucide-react';
 import { getOperationalStatusLabel, getOrderOperationalStatus, getStageLabel } from '../utils/orderStage';
 
 export const Dashboard: React.FC = () => {
@@ -15,7 +15,8 @@ export const Dashboard: React.FC = () => {
     totalScrapKg: 0,
     printingOrders: 0,
     laminationOrders: 0,
-    refiladoOrders: 0
+    refiladoOrders: 0,
+    confeccionOrders: 0
   });
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +40,7 @@ export const Dashboard: React.FC = () => {
         const printingOrders = operationalOrders.filter((order: any) => order.operationalStatus === 'EN_IMPRESION').length;
         const laminationOrders = operationalOrders.filter((order: any) => order.operationalStatus === 'EN_LAMINACION').length;
         const refiladoOrders = operationalOrders.filter((order: any) => order.operationalStatus === 'EN_REFILADO').length;
+        const confeccionOrders = operationalOrders.filter((order: any) => order.operationalStatus === 'EN_CONFECCION').length;
         const pendingControl = operationalOrders.filter((order: any) => order.operationalStatus === 'PENDIENTE_CONTROL').length;
         const openOrders = operationalOrders.filter((order: any) => order.operationalStatus !== 'FINALIZADA').length;
         const finishedOrders = operationalOrders.filter((order: any) => order.operationalStatus === 'FINALIZADA').length;
@@ -60,6 +62,7 @@ export const Dashboard: React.FC = () => {
           printingOrders,
           laminationOrders,
           refiladoOrders,
+          confeccionOrders,
           availableStock,
           lowStockAlerts
         }));
@@ -95,6 +98,7 @@ export const Dashboard: React.FC = () => {
         <SummaryCard title="En Impresion" value={stats.printingOrders.toString()} icon={Layers} color="var(--primary)" />
         <SummaryCard title="En Laminacion" value={stats.laminationOrders.toString()} icon={Droplets} color="var(--accent)" />
         <SummaryCard title="En Refilado" value={stats.refiladoOrders.toString()} icon={Scissors} color="var(--warning)" />
+        <SummaryCard title="En Confeccion" value={stats.confeccionOrders.toString()} icon={PackageCheck} color="var(--success)" />
         <SummaryCard title="Alertas Stock" value={stats.lowStockAlerts.toString()} icon={AlertCircle} color={stats.lowStockAlerts > 0 ? 'var(--danger)' : 'var(--success)'} trend={stats.lowStockAlerts > 0 ? 'Reponer' : 'OK'} />
       </div>
 

@@ -242,12 +242,12 @@ export const OrderForm: React.FC = () => {
     }
   };
 
-  if (user?.role !== 'ADMIN' && !isEditing) {
+  if (user?.role !== 'ADMIN') {
     return (
       <div className="card" style={{ maxWidth: '780px', margin: '2rem auto', textAlign: 'center' }}>
         <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '0.75rem' }}>Edicion restringida</h1>
         <p style={{ color: 'var(--text-muted)' }}>
-          La creacion de ordenes nuevas queda reservada para administracion.
+          La carga administrativa y tecnica de la orden queda reservada para administracion.
         </p>
       </div>
     );
