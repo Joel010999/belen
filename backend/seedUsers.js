@@ -22,6 +22,7 @@ async function main() {
 
   // Fetch machines to get their IDs
   const imp1 = await prisma.machine.findUnique({ where: { code: 'IMP1' }});
+  const imp2 = await prisma.machine.findUnique({ where: { code: 'IMP2' }});
   const lam1 = await prisma.machine.findUnique({ where: { code: 'LAM1' }});
   const ref1 = await prisma.machine.findUnique({ where: { code: 'REF1' }});
   let conf1 = await prisma.machine.findFirst({ where: { type: 'CONFECCION' }});
@@ -71,6 +72,13 @@ async function main() {
       name: 'Terminal Impresora 1',
       role: 'MACHINE',
       machineId: imp1.id
+    },
+    {
+      username: 'impresora2',
+      passwordHash: 'planta123',
+      name: 'Terminal Impresora 2',
+      role: 'MACHINE',
+      machineId: imp2.id
     },
     {
       username: 'laminadora',
