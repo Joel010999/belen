@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const productionApiUrl = 'https://belen-production-0486.up.railway.app/api';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? productionApiUrl : 'http://localhost:3001/api')
 });
 
 api.interceptors.request.use((config) => {
