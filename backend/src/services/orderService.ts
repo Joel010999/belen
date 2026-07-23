@@ -894,6 +894,118 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
   return [header, ...rows].join('\n');
 };
 
+const cleanPalmField = (value: any) => String(value ?? '').replace(/,/g, ' ').replace(/\r?\n/g, ' ').trim();
+
+const formatPalmDate = (dateValue?: Date | string | null) => {
+  const date = dateValue ? new Date(dateValue) : new Date();
+  return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+};
+
+const parsePalmQty = (value: any) => {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).replace(',', '.').replace(/[^0-9.-]/g, '');
+  if (!normalized) return null;
+  const parsed = parseFloat(normalized);
+  return isNaN(parsed) ? null : parsed;
+};
+
+const formatPalmNumber = (value: number) => {
+  if (!Number.isFinite(value)) return '0';
+  const fixed = Number.isInteger(value) ? value.toString() : value.toFixed(3);
+  return fixed.replace(/\.?0+$/, '');
+};
+
+const getAlegonExportOrders = async (month?: string) => {
+  const where: any = {};
+  const monthRange = buildMonthRange(month);
+
+  if (monthRange) {
+    where.createdAt = {
+      gte: monthRange.start,
+      lt: monthRange.end
+    };
+  }
+
+  return await prisma.productionOrder.findMany({
+    where,
+    include: {
+      client: true,
+      product: true,
+      products: { include: { product: true } },
+      consumptions: { include: { supply: true } },
+      result: true
+    },
+    orderBy: { createdAt: 'asc' }
+  });
+};
+
+export const exportAlegonFacturaPalm = async (month?: string) => {
+  const orders = await getAlegonExportOrders(month);
+
+  return orders.map((order: any) => [
+    'NOTP',
+    formatPalmDate(order.date || order.createdAt),
+    '0',
+    cleanPalmField(order.orderNumber),
+    cleanPalmField(order.client?.code),
+    '0',
+    '0',
+    '0'
+  ].join(',')).join('\n');
+};
+
+export const exportAlegonDetallePalm = async (month?: string) => {
+  const orders = await getAlegonExportOrders(month);
+  const rows: string[] = [];
+
+  for (const order of orders as any[]) {
+    const orderNumber = cleanPalmField(order.orderNumber);
+    const productLines = order.products?.length
+      ? order.products.map((item: any) => ({
+          code: item.product?.code,
+          qty: parsePalmQty(item.plannedQty)
+        }))
+      : [{
+          code: order.product?.code,
+          qty: order.result?.producedQty ? parsePalmQty(order.result.producedQty) : parsePalmQty(order.plannedQty)
+        }];
+
+    productLines.forEach((item: any) => {
+      if (!item.code || item.qty === null || item.qty === 0) return;
+      rows.push([
+        'P',
+        orderNumber,
+        cleanPalmField(item.code),
+        formatPalmNumber(Math.abs(item.qty)),
+        '0',
+        '21',
+        '1',
+        '0'
+      ].join(','));
+    });
+
+    order.consumptions?.forEach((consumption: any) => {
+      const realQty = parsePalmQty(consumption.realQty);
+      const code = consumption.supply?.code;
+      if (!code || realQty === null || realQty === 0) return;
+
+      // Consumed supplies decrease stock in Alegon, returns increase it.
+      rows.push([
+        'P',
+        orderNumber,
+        cleanPalmField(code),
+        formatPalmNumber(-realQty),
+        '0',
+        '21',
+        '1',
+        '0'
+      ].join(','));
+    });
+  }
+
+  return rows.join('\n');
+};
+
 export const updateOrder = async (id: number, orderData: any, actor?: ActorContext) => {
   ensureAdmin(actor);
 

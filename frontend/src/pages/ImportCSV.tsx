@@ -2,9 +2,16 @@ import React, { useState } from 'react';
 import api from '../services/api';
 import { Upload, Download, FileText, CheckCircle2, History, AlertCircle, Package, Users, DollarSign } from 'lucide-react';
 
+const getCurrentMonth = () => {
+  const now = new Date();
+  const month = `${now.getMonth() + 1}`.padStart(2, '0');
+  return `${now.getFullYear()}-${month}`;
+};
+
 export const ImportCSV: React.FC = () => {
   const [importing, setImporting] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
+  const [alegonMonth, setAlegonMonth] = useState(getCurrentMonth());
 
   const handleImport = async (type: string, file: File) => {
     setImporting(type);
@@ -53,6 +60,25 @@ export const ImportCSV: React.FC = () => {
       link.remove();
     } catch (err) {
       alert(`Error al exportar ${type}`);
+    }
+  };
+
+  const handleAlegonExport = async (type: 'factura' | 'detalle') => {
+    try {
+      const filename = type === 'factura' ? 'Factura_palm.txt' : 'Detalle_palm.txt';
+      const res = await api.get(`/orders/export-alegon/${type}`, {
+        params: { month: alegonMonth },
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      alert(`Error al exportar ${type === 'factura' ? 'Factura_palm' : 'Detalle_palm'}`);
     }
   };
 
@@ -117,6 +143,32 @@ export const ImportCSV: React.FC = () => {
               icon={<Users />} 
               onClick={() => handleExport('CLIENTES')}
             />
+          </div>
+
+          <div className="card" style={{ marginTop: '1.5rem', padding: '1.25rem', border: '1px solid rgba(34, 197, 94, 0.25)', backgroundColor: 'rgba(34, 197, 94, 0.06)' }}>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+              <div style={{ padding: '0.75rem', backgroundColor: 'rgba(34, 197, 94, 0.12)', borderRadius: '8px', color: 'var(--success)' }}>
+                <FileText size={20} />
+              </div>
+              <div>
+                <p style={{ fontWeight: 800, margin: 0 }}>Exportacion Alegon / Silcar</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>Genera Factura_palm.txt y Detalle_palm.txt sin encabezados.</p>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div>
+                <label className="label">Mes a exportar</label>
+                <input type="month" className="input" value={alegonMonth} onChange={(e) => setAlegonMonth(e.target.value)} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button className="btn" style={{ padding: '0.6rem 1rem', border: '1px solid var(--success)', color: 'var(--success)' }} onClick={() => handleAlegonExport('factura')}>
+                Descargar Factura_palm.txt
+              </button>
+              <button className="btn" style={{ padding: '0.6rem 1rem', border: '1px solid var(--success)', color: 'var(--success)' }} onClick={() => handleAlegonExport('detalle')}>
+                Descargar Detalle_palm.txt
+              </button>
+            </div>
           </div>
 
           {result && (

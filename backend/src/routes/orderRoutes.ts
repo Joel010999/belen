@@ -5,6 +5,8 @@ const router = Router();
 
 router.post('/', orderController.createOrder);
 router.get('/export-csv', orderController.exportOrdersCSV);
+router.get('/export-alegon/factura', orderController.exportAlegonFacturaPalm);
+router.get('/export-alegon/detalle', orderController.exportAlegonDetallePalm);
 router.get('/stats', orderController.getDashboardStats);
 router.get('/stats/costs', orderController.getCostStats);
 router.get('/', orderController.getAllOrders);

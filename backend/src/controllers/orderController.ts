@@ -108,6 +108,32 @@ export const exportOrdersCSV = async (req: Request, res: Response) => {
   }
 };
 
+export const exportAlegonFacturaPalm = async (req: Request, res: Response) => {
+  try {
+    const month = typeof req.query.month === 'string' ? req.query.month : undefined;
+    const content = await orderService.exportAlegonFacturaPalm(month);
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=Factura_palm.txt');
+    res.send(content);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const exportAlegonDetallePalm = async (req: Request, res: Response) => {
+  try {
+    const month = typeof req.query.month === 'string' ? req.query.month : undefined;
+    const content = await orderService.exportAlegonDetallePalm(month);
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=Detalle_palm.txt');
+    res.send(content);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export const changeStatus = async (req: Request, res: Response) => {
   try {
     const order = await orderService.changeStatus(parseInt(req.params.id as string), req.body.status);
