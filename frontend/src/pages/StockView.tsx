@@ -7,6 +7,14 @@ export const StockView: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState("");
     const [filterCategory, setFilterCategory] = useState("ALL");
     const [loading, setLoading] = useState(true);
+    const savedUser = typeof window !== 'undefined' ? localStorage.getItem('silcar_user') : null;
+    let currentUser: any = null;
+    try {
+        currentUser = savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+        currentUser = null;
+    }
+    const canEditPrices = currentUser?.role === 'ADMIN';
 
     const handleExport = async () => {
         try {
@@ -57,6 +65,20 @@ export const StockView: React.FC = () => {
             setItems(prev => prev.map(i => i.id === item.id && i.category === item.category ? { ...i, minStock: parseFloat(newMin) } : i));
         } catch (e) {
             alert('Error al actualizar el stock mínimo');
+        }
+    };
+
+    const updatePrice = async (item: any, newPrice: string) => {
+        try {
+            await api.put('/stock/price', {
+                productId: item.category === 'PRODUCTO' ? item.id : null,
+                supplyId: item.category !== 'PRODUCTO' ? item.id : null,
+                price: newPrice
+            });
+            const parsedPrice = newPrice === '' ? null : parseFloat(newPrice.replace(',', '.'));
+            setItems(prev => prev.map(i => i.id === item.id && i.category === item.category ? { ...i, price: Number.isFinite(parsedPrice) ? parsedPrice : null } : i));
+        } catch (e: any) {
+            alert(e?.response?.data?.error || 'Error al actualizar el precio');
         }
     };
 
@@ -174,8 +196,20 @@ export const StockView: React.FC = () => {
                                             </span>
                                         </div>
                                     </td>
-                                    <td data-label="Precio (USD)" style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
-                                        ${(Math.random() * 5 + 1).toFixed(2)}
+                                    <td data-label="Precio (USD)" style={{ color: item.price ? 'var(--text-main)' : 'var(--danger)', fontWeight: 600 }}>
+                                        {canEditPrices ? (
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                defaultValue={item.price ?? ''}
+                                                onBlur={(e) => updatePrice(item, e.target.value)}
+                                                className="input"
+                                                placeholder="Sin precio"
+                                                style={{ width: '110px', padding: '0.4rem', fontSize: '0.875rem' }}
+                                            />
+                                        ) : (
+                                            item.price ? `$${Number(item.price).toFixed(2)}` : 'Sin precio'
+                                        )}
                                     </td>
                                     <td data-label="Última Act." style={{ paddingRight: '1.5rem', textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                         {new Date(item.updatedAt).toLocaleDateString()}

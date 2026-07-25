@@ -138,18 +138,27 @@ model ColorOrder {
 }
 
 model Consumption {
-  id             Int             @id @default(autoincrement())
-  orderId        Int
-  supplyId       Int
-  plannedQty     Float
-  realQty        Float           @default(0)
-  unit           String
-  type           String
-  unitPrice      Float?
-  calculatedCost Float?
-  observations   String?
-  supply         Supply          @relation(fields: [supplyId], references: [id])
-  order          ProductionOrder @relation(fields: [orderId], references: [id])
+  id                Int             @id @default(autoincrement())
+  orderId           Int
+  supplyId          Int
+  plannedQty        Float
+  realQty           Float           @default(0)
+  unit              String
+  type              String
+  unitPrice         Float?
+  calculatedCost    Float?
+  exchangeRate      Float?
+  calculatedCostArs Float?
+  observations      String?
+  supply            Supply          @relation(fields: [supplyId], references: [id])
+  order             ProductionOrder @relation(fields: [orderId], references: [id])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ProductionProcess {

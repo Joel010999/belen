@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma';
+import { getCurrentUsdExchangeRate, parseExchangeRate } from './exchangeRateService';
 
 type ActorContext = {
   userId?: number;
@@ -337,6 +338,7 @@ export const getAllOrders = async (machineId?: number, month?: string) => {
       products: { include: { product: true } },
       technicalSpec: true,
       colorOrders: true,
+      consumptions: { include: { supply: true } },
       machine: true,
       processes: true,
       operators: {
@@ -362,6 +364,7 @@ export const getOrderById = async (id: number) => {
       products: { include: { product: true } },
       technicalSpec: true,
       colorOrders: true,
+      consumptions: { include: { supply: true } },
       machine: true,
       operators: {
         include: {
@@ -667,12 +670,27 @@ export const getCostStats = async () => {
       realKg += c.realQty || 0;
     });
 
+    const totalCostUsd = o.consumptions.reduce((acc, c: any) => {
+      const unitPrice = c.unitPrice ?? c.supply?.price;
+      const subtotal = c.calculatedCost ?? (unitPrice ? (c.realQty || 0) * unitPrice : 0);
+      return acc + (subtotal || 0);
+    }, 0);
+
+    const totalCostArs = o.consumptions.reduce((acc, c: any) => {
+      const unitPrice = c.unitPrice ?? c.supply?.price;
+      const subtotalUsd = c.calculatedCost ?? (unitPrice ? (c.realQty || 0) * unitPrice : 0);
+      const subtotalArs = c.calculatedCostArs ?? (c.exchangeRate && subtotalUsd ? subtotalUsd * c.exchangeRate : 0);
+      return acc + (subtotalArs || 0);
+    }, 0);
+
     return {
       orderNumber: o.orderNumber,
       status: o.status,
       date: o.date,
       plannedKg,
       realKg,
+      totalCostUsd,
+      totalCostArs,
       difference: realKg - plannedKg,
       differencePercent: plannedKg > 0 ? ((realKg - plannedKg) / plannedKg) * 100 : 0
     };
@@ -812,6 +830,8 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
     'Tipo Impresión',
     'Códigos Insumos',
     'Cantidades Insumos',
+    'Costo Insumos USD',
+    'Costo Insumos ARS',
     'Etapa Impresión - Máquina',
     'Etapa Impresión - Operario',
     'Etapa Impresión - Metros',
@@ -850,6 +870,17 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
     const consumos = o.consumptions || [];
     const codigosInsumos = consumos.map((c: any) => c.supply?.code || c.supply?.name || '-').join(' / ');
     const cantidadesInsumos = consumos.map((c: any) => `${c.realQty}${c.unit}`).join(' / ');
+    const costoInsumosUsd = consumos.reduce((acc: number, c: any) => {
+      const unitPrice = c.unitPrice ?? c.supply?.price;
+      const subtotal = c.calculatedCost ?? (unitPrice ? (c.realQty || 0) * unitPrice : 0);
+      return acc + (subtotal || 0);
+    }, 0);
+    const costoInsumosArs = consumos.reduce((acc: number, c: any) => {
+      const unitPrice = c.unitPrice ?? c.supply?.price;
+      const subtotalUsd = c.calculatedCost ?? (unitPrice ? (c.realQty || 0) * unitPrice : 0);
+      const subtotalArs = c.calculatedCostArs ?? (c.exchangeRate && subtotalUsd ? subtotalUsd * c.exchangeRate : 0);
+      return acc + (subtotalArs || 0);
+    }, 0);
 
     return [
       o.orderNumber,
@@ -874,6 +905,8 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
       o.technicalSpec?.printingType || '',
       codigosInsumos || '-',
       cantidadesInsumos || '-',
+      costoInsumosUsd || '-',
+      costoInsumosArs || '-',
       impresion?.machine?.name || '-',
       impresion?.operator ? `${impresion.operator.firstName} ${impresion.operator.lastName}` : '-',
       impresion?.printingData?.processedMeters || '-',
@@ -1361,6 +1394,11 @@ export const saveFinalInspection = async (data: any, actor?: ActorContext) => {
 
 export const registerConsumptions = async (orderId: number, data: any) => {
   const { type, consumptions, realMeters } = data;
+  const postedExchangeRate = parseExchangeRate(data?.exchangeRate);
+  const exchangeRateResult = postedExchangeRate
+    ? { rate: postedExchangeRate }
+    : await getCurrentUsdExchangeRate();
+  const exchangeRate = exchangeRateResult.rate;
   
   return await prisma.$transaction(async (tx) => {
     // 1. Save general consumptions and deduct stock
@@ -1384,6 +1422,7 @@ export const registerConsumptions = async (orderId: number, data: any) => {
         const supply = await tx.supply.findUnique({ where: { id: supplyId } });
         const unitPrice = supply?.price ?? null;
         const calculatedCost = unitPrice !== null ? realQty * unitPrice : null;
+        const calculatedCostArs = calculatedCost !== null && exchangeRate ? calculatedCost * exchangeRate : null;
 
         // Upsert Consumption record
         const existingCons = await tx.consumption.findFirst({
@@ -1397,6 +1436,8 @@ export const registerConsumptions = async (orderId: number, data: any) => {
               realQty: (existingCons.realQty || 0) + realQty,
               unitPrice: unitPrice ?? existingCons.unitPrice,
               calculatedCost: calculatedCost !== null ? (existingCons.calculatedCost || 0) + calculatedCost : existingCons.calculatedCost,
+              exchangeRate: exchangeRate ?? existingCons.exchangeRate,
+              calculatedCostArs: calculatedCostArs !== null ? (existingCons.calculatedCostArs || 0) + calculatedCostArs : existingCons.calculatedCostArs,
               observations: cons.loads ? `Cargas: ${cons.loads} | Sobrante: ${cons.endValue}` : undefined
             }
           });
@@ -1411,6 +1452,8 @@ export const registerConsumptions = async (orderId: number, data: any) => {
               type: type,
               unitPrice,
               calculatedCost,
+              exchangeRate,
+              calculatedCostArs,
               observations: cons.loads ? `Cargas: ${cons.loads} | Sobrante: ${cons.endValue}` : undefined
             }
           });

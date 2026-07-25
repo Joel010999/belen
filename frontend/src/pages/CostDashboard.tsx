@@ -26,6 +26,14 @@ export const CostDashboard: React.FC = () => {
   const totalReal = stats.reduce((acc, curr) => acc + curr.realKg, 0);
   const totalDiff = totalReal - totalPlanned;
   const globalDiffPercent = totalPlanned > 0 ? (totalDiff / totalPlanned) * 100 : 0;
+  const totalCostArs = stats.reduce((acc, curr) => acc + (curr.totalCostArs || 0), 0);
+  const totalCostUsd = stats.reduce((acc, curr) => acc + (curr.totalCostUsd || 0), 0);
+
+  const formatCurrency = (value: number, currency: 'USD' | 'ARS') => new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: currency === 'USD' ? 2 : 0
+  }).format(value || 0);
 
   return (
     <div className="fade-in" style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
@@ -56,6 +64,11 @@ export const CostDashboard: React.FC = () => {
           </p>
           <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>({Math.abs(totalDiff).toFixed(2)} kg {totalDiff > 0 ? 'de más' : 'ahorrados'})</span>
         </div>
+        <div className="glass-panel" style={{ padding: '1.5rem', borderLeft: '4px solid #10b981' }}>
+          <h3 style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>Costo Total Insumos</h3>
+          <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#10b981' }}>{formatCurrency(totalCostArs, 'ARS')}</p>
+          <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>{formatCurrency(totalCostUsd, 'USD')} base</span>
+        </div>
       </div>
 
       <div className="glass-panel" style={{ overflowX: 'auto' }}>
@@ -70,6 +83,7 @@ export const CostDashboard: React.FC = () => {
                 <th style={{ padding: '1rem' }}>Estado</th>
                 <th style={{ padding: '1rem' }}>Planificado</th>
                 <th style={{ padding: '1rem' }}>Consumido</th>
+                <th style={{ padding: '1rem' }}>Costo ARS</th>
                 <th style={{ padding: '1rem' }}>Diferencia</th>
               </tr>
             </thead>
@@ -81,6 +95,7 @@ export const CostDashboard: React.FC = () => {
                   <td style={{ padding: '1rem' }}>{stat.status}</td>
                   <td style={{ padding: '1rem' }}>{stat.plannedKg.toFixed(2)} kg</td>
                   <td style={{ padding: '1rem' }}>{stat.realKg.toFixed(2)} kg</td>
+                  <td style={{ padding: '1rem', fontWeight: 700, color: '#10b981' }}>{formatCurrency(stat.totalCostArs || 0, 'ARS')}</td>
                   <td style={{ padding: '1rem' }}>
                     <span style={{ 
                       padding: '0.25rem 0.5rem', 
@@ -95,7 +110,7 @@ export const CostDashboard: React.FC = () => {
               ))}
               {stats.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                  <td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
                     No hay suficientes datos de consumos para mostrar estadísticas.
                   </td>
                 </tr>

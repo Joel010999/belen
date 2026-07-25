@@ -58,6 +58,12 @@ export const OrderHistory: React.FC = () => {
     return matchesSearch && matchesStatus && matchesClient && matchesProduct && matchesDateFrom && matchesDateTo;
   });
 
+  const formatCurrency = (value: number) => new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    maximumFractionDigits: 0
+  }).format(value || 0);
+
   return (
     <div className="fade-in">
       <div
@@ -175,12 +181,19 @@ export const OrderHistory: React.FC = () => {
                 <th>Cliente</th>
                 <th>Producto</th>
                 <th>Kg Consumidos</th>
+                <th>Costo Insumos</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {filteredOrders.map((order) => {
                 const totalKg = order.consumptions?.reduce((acc: number, c: any) => acc + (c.realQty || 0), 0) || 0;
+                const totalCostArs = order.consumptions?.reduce((acc: number, c: any) => {
+                  const unitPrice = c.unitPrice ?? c.supply?.price;
+                  const subtotalUsd = c.calculatedCost ?? (unitPrice ? (c.realQty || 0) * unitPrice : 0);
+                  const subtotalArs = c.calculatedCostArs ?? (c.exchangeRate && subtotalUsd ? subtotalUsd * c.exchangeRate : 0);
+                  return acc + (subtotalArs || 0);
+                }, 0) || 0;
                 return (
                   <tr
                     key={order.id}
@@ -198,6 +211,7 @@ export const OrderHistory: React.FC = () => {
                     </td>
                     <td data-label="Producto">{order.product?.name}</td>
                     <td data-label="Kg Consumidos">{totalKg.toFixed(2)} kg</td>
+                    <td data-label="Costo Insumos" style={{ fontWeight: 700, color: 'var(--primary)' }}>{formatCurrency(totalCostArs)}</td>
                     <td data-label="Acciones">
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
                         <Link to={`/ordenes/${order.id}`} style={{ color: 'var(--text-muted)', background: 'none' }} title="Ver Detalle">
@@ -210,7 +224,7 @@ export const OrderHistory: React.FC = () => {
               })}
               {filteredOrders.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                     No se encontraron ordenes con estos filtros.
                   </td>
                 </tr>

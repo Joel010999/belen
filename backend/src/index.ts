@@ -6,6 +6,7 @@ import importRoutes from './routes/importRoutes';
 import orderRoutes from './routes/orderRoutes';
 import authRoutes from './routes/authRoutes';
 import exportRoutes from './routes/exportRoutes';
+import { getCurrentUsdExchangeRate, saveManualUsdExchangeRate } from './services/exchangeRateService';
 
 dotenv.config();
 
@@ -30,6 +31,27 @@ app.get('/api/machines', async (req, res) => res.json(await prisma.machine.findM
 app.get('/api/operators', async (req, res) => res.json(await prisma.operator.findMany()));
 app.get('/api/supplies', async (req, res) => res.json(await prisma.supply.findMany({ include: { stock: true } })));
 
+app.get('/api/exchange-rate/usd-official', async (req, res) => {
+  try {
+    res.json(await getCurrentUsdExchangeRate());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/exchange-rate/usd-official', async (req, res) => {
+  try {
+    const role = typeof req.headers['x-user-role'] === 'string' ? req.headers['x-user-role'].toUpperCase() : '';
+    if (role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Solo administracion puede fijar la cotizacion manual' });
+    }
+
+    res.json(await saveManualUsdExchangeRate(req.body?.rate));
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 app.put('/api/stock/config', async (req, res) => {
   const { productId, supplyId, itemType, unit, minStock } = req.body;
   try {
@@ -46,6 +68,42 @@ app.put('/api/stock/config', async (req, res) => {
       }
     });
     res.json(updated);
+  } catch(e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/stock/price', async (req, res) => {
+  const { productId, supplyId, price } = req.body;
+  try {
+    const role = typeof req.headers['x-user-role'] === 'string' ? req.headers['x-user-role'].toUpperCase() : '';
+    if (role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Solo administracion puede modificar precios' });
+    }
+
+    const parsedPrice = price === '' || price === null || price === undefined
+      ? null
+      : parseFloat(String(price).replace(',', '.'));
+
+    if (parsedPrice !== null && (!Number.isFinite(parsedPrice) || parsedPrice < 0)) {
+      return res.status(400).json({ error: 'El precio debe ser cero o mayor' });
+    }
+
+    if (productId) {
+      return res.json(await prisma.product.update({
+        where: { id: parseInt(productId) },
+        data: { price: parsedPrice }
+      }));
+    }
+
+    if (supplyId) {
+      return res.json(await prisma.supply.update({
+        where: { id: parseInt(supplyId) },
+        data: { price: parsedPrice }
+      }));
+    }
+
+    res.status(400).json({ error: 'Debe indicar producto o insumo' });
   } catch(e: any) {
     res.status(500).json({ error: e.message });
   }
