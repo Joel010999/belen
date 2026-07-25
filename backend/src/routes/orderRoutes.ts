@@ -20,8 +20,10 @@ router.get('/:orderId/final-inspections', orderController.getFinalInspections);
 router.post('/:orderId/final-inspections', orderController.saveFinalInspection);
 router.get('/:id', orderController.getOrderById);
 router.post('/processes', orderController.createProcess);
+router.post('/:id/stage-action', orderController.updateStageAction);
 router.post('/:id/finalize', orderController.finalizeOrder);
 router.post('/:id/consumptions', orderController.registerConsumptions);
+router.patch('/:id/status', orderController.changeStatus);
 router.delete('/:id', orderController.deleteOrder);
 router.put('/:id', orderController.updateOrder);
 

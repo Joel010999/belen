@@ -12,7 +12,8 @@ import {
   Edit,
   ShieldCheck,
   CheckSquare,
-  FlaskConical
+  FlaskConical,
+  Truck
 } from 'lucide-react';
 import { FormSection } from '../components/FormSection';
 import { OrderConsumptions } from '../components/OrderConsumptions';
@@ -130,12 +131,22 @@ export const OrderDetail: React.FC = () => {
   };
 
   const handleFinalize = async () => {
-    if (!window.confirm('Esta seguro de finalizar y cerrar esta orden? Esta accion sumara el stock final al inventario y registrara la fecha de cierre.')) return;
+    if (!window.confirm('Marcar esta orden como producto terminado? Esta accion suma el producto terminado al inventario y registra la fecha de cierre.')) return;
     try {
       await api.post(`/orders/${order.id}/finalize`);
       refreshOrder();
     } catch (e: any) {
       alert(e.response?.data?.error || 'Error al finalizar orden');
+    }
+  };
+
+  const handleMarkDelivered = async () => {
+    if (!window.confirm('Marcar esta orden como producto entregado?')) return;
+    try {
+      await api.patch(`/orders/${order.id}/status`, { status: 'Entregadas' });
+      refreshOrder();
+    } catch (e: any) {
+      alert(e.response?.data?.error || 'Error al marcar como entregada');
     }
   };
 
@@ -218,7 +229,7 @@ export const OrderDetail: React.FC = () => {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
-          {user?.role === 'ADMIN' && order.status !== 'Finalizadas' && (
+          {user?.role === 'ADMIN' && order.status !== 'Finalizadas' && order.status !== 'Entregadas' && (
             <button
               onClick={handleFinalize}
               className="btn"
@@ -230,7 +241,23 @@ export const OrderDetail: React.FC = () => {
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <ShieldCheck size={20} />
-                <span>FINALIZAR ORDEN</span>
+                <span>PRODUCTO TERMINADO</span>
+              </span>
+            </button>
+          )}
+          {user?.role === 'ADMIN' && order.status === 'Finalizadas' && (
+            <button
+              onClick={handleMarkDelivered}
+              className="btn"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.75rem',
+                padding: '1rem 2rem', fontSize: '1rem', fontWeight: 700,
+                backgroundColor: '#f59e0b', color: '#111827', border: 'none', cursor: 'pointer', borderRadius: '8px'
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <Truck size={20} />
+                <span>PRODUCTO ENTREGADO</span>
               </span>
             </button>
           )}

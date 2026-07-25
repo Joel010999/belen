@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
-import { Play, Save, Layers, Droplets, Scissors, AlertTriangle, TimerReset, PackageCheck, Plus, Trash2 } from 'lucide-react';
+import { Play, Save, Layers, Droplets, Scissors, AlertTriangle, TimerReset, PackageCheck, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import { FormSection } from '../components/FormSection';
 import { OrderConsumptions } from '../components/OrderConsumptions';
 import { useAuth } from '../hooks/useAuth';
@@ -46,6 +46,13 @@ const createInitialOutputBobbin = (index = 1) => ({
   notes: ''
 });
 
+const APPROVAL_FIELDS: Record<StageType, string> = {
+  IMPRESION: 'approvedPrinting',
+  LAMINACION: 'approvedLamination',
+  REFILADO: 'approvedRefilado',
+  CONFECCION: 'approvedConfeccion'
+};
+
 export const ProductionProcess: React.FC = () => {
   const { user } = useAuth();
   const [activeStage, setActiveStage] = useState<StageType>('IMPRESION');
@@ -82,7 +89,7 @@ export const ProductionProcess: React.FC = () => {
 
   const fetchOrders = async () => {
     const ordersRes = await api.get('/orders');
-    setOrders(ordersRes.data.filter((order: any) => order.status !== 'Finalizadas'));
+    setOrders(ordersRes.data.filter((order: any) => order.status !== 'Finalizadas' && order.status !== 'Entregadas'));
   };
 
   const fetchSelectedOrder = async (orderId: string) => {
@@ -148,6 +155,33 @@ export const ProductionProcess: React.FC = () => {
     const stageProcess = selectedOrder?.processes?.filter((process: any) => process.type === activeStage) || [];
     return stageProcess.flatMap((process: any) => process.timeLogs || []);
   }, [activeStage, selectedOrder]);
+  const plannedStages = useMemo(() => {
+    const processTypes = new Set((selectedOrder?.processes || []).map((process: any) => process.type));
+    return STAGES.map((stage) => stage.key).filter((stage) => processTypes.has(stage));
+  }, [selectedOrder]);
+  const stageProcess = useMemo(() => {
+    const processes = selectedOrder?.processes?.filter((process: any) => process.type === activeStage && process.status !== 'Planificada') || [];
+    return processes.sort((a: any, b: any) => {
+      const left = new Date(b.endTime || b.startTime || 0).getTime();
+      const right = new Date(a.endTime || a.startTime || 0).getTime();
+      return left - right;
+    })[0];
+  }, [activeStage, selectedOrder]);
+  const isStagePlanned = plannedStages.includes(activeStage);
+  const isStageInProcess = stageProcess?.status === 'en_proceso';
+  const isStageFinished = Boolean(selectedOrder?.[APPROVAL_FIELDS[activeStage]]) || stageProcess?.status === 'finalizado';
+  const allPlannedStagesFinished = plannedStages.length > 0 && plannedStages.every((stage) => {
+    const process = selectedOrder?.processes
+      ?.filter((item: any) => item.type === stage && item.status !== 'Planificada')
+      ?.sort((a: any, b: any) => new Date(b.endTime || b.startTime || 0).getTime() - new Date(a.endTime || a.startTime || 0).getTime())[0];
+    return Boolean(selectedOrder?.[APPROVAL_FIELDS[stage]]) || process?.status === 'finalizado';
+  });
+  const canMarkProductFinished = Boolean(
+    selectedOrder &&
+    selectedOrder.status !== 'Finalizadas' &&
+    selectedOrder.status !== 'Entregadas' &&
+    allPlannedStagesFinished
+  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const target = e.target;
@@ -190,6 +224,64 @@ export const ProductionProcess: React.FC = () => {
   const totalOutputKg = useMemo(() => (
     refiladoOutputBobbins.reduce((acc, bobbin) => acc + (parseFloat(bobbin.kg) || 0), 0)
   ), [refiladoOutputBobbins]);
+
+  const handleStageAction = async (action: 'START' | 'FINISH') => {
+    if (!selectedOrderId) {
+      setError('Seleccione una orden antes de avanzar la etapa.');
+      return;
+    }
+
+    if (!isStagePlanned) {
+      setError(`La etapa ${activeStage.toLowerCase()} no esta planificada para esta orden.`);
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setProcessSuccess(null);
+
+    try {
+      await api.post(`/orders/${selectedOrderId}/stage-action`, {
+        stage: activeStage,
+        action,
+        machineId: stageData.machineId || undefined,
+        operatorId: stageData.operatorId || undefined
+      });
+      await fetchSelectedOrder(selectedOrderId);
+      await fetchOrders();
+      setProcessSuccess(action === 'START'
+        ? `${activeStage.toLowerCase()} marcada en proceso.`
+        : `${activeStage.toLowerCase()} terminada. Ya puede continuar la siguiente etapa planificada.`
+      );
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.error || 'No se pudo actualizar el estado de la etapa.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMarkProductFinished = async () => {
+    if (!selectedOrderId) return;
+
+    if (!window.confirm('Marcar esta orden como producto terminado? Esto suma el producto terminado al stock.')) return;
+
+    setSaving(true);
+    setError(null);
+    setProcessSuccess(null);
+
+    try {
+      await api.post(`/orders/${selectedOrderId}/finalize`);
+      await fetchSelectedOrder(selectedOrderId);
+      await fetchOrders();
+      setProcessSuccess('Producto terminado registrado. Marcos/administracion luego puede marcarlo como entregado.');
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.error || 'No se pudo marcar producto terminado.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleSaveProcess = async () => {
     if (!selectedOrderId) {
@@ -437,6 +529,58 @@ export const ProductionProcess: React.FC = () => {
             </div>
           </FormSection>
 
+          <div className="card" style={{ marginTop: '1.5rem', border: '1px solid rgba(37, 99, 235, 0.25)', backgroundColor: 'rgba(37, 99, 235, 0.06)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.3rem' }}>Estado de {activeStage.toLowerCase()}</p>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
+                  {!isStagePlanned
+                    ? 'Etapa no planificada'
+                    : isStageFinished
+                      ? 'Etapa terminada'
+                      : isStageInProcess
+                        ? 'En proceso'
+                        : 'Pendiente de inicio'}
+                </h3>
+                <p style={{ color: 'var(--text-muted)', marginTop: '0.35rem', fontSize: '0.9rem' }}>
+                  {isStagePlanned
+                    ? 'Primero se pone en proceso, despues se cargan datos/consumos y al final se marca terminada.'
+                    : 'Esta orden no tiene esta etapa dentro de su planificacion.'}
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => handleStageAction('START')}
+                  disabled={saving || !isStagePlanned || isStageInProcess || isStageFinished}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', padding: '0.85rem 1.2rem' }}
+                >
+                  <Play size={18} />
+                  Poner en proceso
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => handleStageAction('FINISH')}
+                  disabled={saving || !isStageInProcess}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', padding: '0.85rem 1.2rem', border: '1px solid var(--success)', color: 'var(--success)' }}
+                >
+                  <CheckCircle2 size={18} />
+                  Marcar etapa terminada
+                </button>
+                <button
+                  className="btn"
+                  onClick={handleMarkProductFinished}
+                  disabled={saving || !canMarkProductFinished}
+                  title={allPlannedStagesFinished ? 'Marcar producto terminado' : 'Completa todas las etapas planificadas primero'}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', padding: '0.85rem 1.2rem', border: '1px solid #f59e0b', color: '#fbbf24', opacity: canMarkProductFinished ? 1 : 0.45 }}
+                >
+                  <PackageCheck size={18} />
+                  Producto terminado
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div className="card" style={{ marginTop: '1.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
               <StageIcon size={22} color="var(--primary)" />
@@ -681,9 +825,11 @@ export const ProductionProcess: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>
               <div style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.95rem' }}>
                 <TimerReset size={16} />
-                Registra aqui el avance de etapa. Los consumos se confirman aparte y descuentan stock en el momento.
+                {isStageInProcess
+                  ? 'Registra aqui datos de la etapa. Los consumos se confirman aparte y descuentan stock en el momento.'
+                  : 'Primero marca la etapa como en proceso para poder cargar datos operativos.'}
               </div>
-              <button onClick={handleSaveProcess} disabled={saving} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.9rem 1.6rem' }}>
+              <button onClick={handleSaveProcess} disabled={saving || !isStageInProcess} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.9rem 1.6rem' }}>
                 {saving ? <Play size={18} /> : <Save size={18} />}
                 <span>{saving ? 'GUARDANDO...' : 'REGISTRAR ETAPA'}</span>
               </button>
@@ -755,7 +901,13 @@ export const ProductionProcess: React.FC = () => {
             </div>
           </div>
 
-          {canUseConsumptions && (
+          {canUseConsumptions && !isStageInProcess && (
+            <div className="card" style={{ marginTop: '1.5rem', color: 'var(--text-muted)' }}>
+              Para cargar consumos de {activeStage.toLowerCase()}, primero marca la etapa como en proceso.
+            </div>
+          )}
+
+          {canUseConsumptions && isStageInProcess && (
             <OrderConsumptions
               order={selectedOrder}
               onUpdate={() => fetchSelectedOrder(selectedOrderId)}

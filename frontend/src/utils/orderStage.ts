@@ -19,7 +19,9 @@ export const getOrderOperationalStatus = (order: any) => {
   let operationalStatus = 'PLANIFICADA';
   let currentStage: string | null = null;
 
-  if (order?.status === 'Finalizadas') {
+  if (order?.status === 'Entregadas') {
+    operationalStatus = 'ENTREGADA';
+  } else if (order?.status === 'Finalizadas') {
     operationalStatus = 'FINALIZADA';
   } else if (order?.approvedConfeccion) {
     operationalStatus = 'PENDIENTE_CONTROL';
@@ -97,7 +99,8 @@ export const getOperationalStatusLabel = (status: string) => {
     EN_CONFECCION: 'En Confeccion',
     CONFECCION_COMPLETA: 'Confeccion Completa',
     PENDIENTE_CONTROL: 'Pendiente Control',
-    FINALIZADA: 'Finalizada'
+    FINALIZADA: 'Finalizada',
+    ENTREGADA: 'Entregada'
   };
 
   return labels[status] || status;

@@ -88,7 +88,7 @@ export const OrdersList: React.FC = () => {
       filterStatus === 'ALL'
         ? true
         : filterStatus === 'ACTIVE'
-          ? order.operationalStatus !== 'FINALIZADA'
+          ? order.operationalStatus !== 'FINALIZADA' && order.operationalStatus !== 'ENTREGADA'
           : order.operationalStatus === filterStatus;
 
     const matchesMachine =
@@ -156,6 +156,7 @@ export const OrdersList: React.FC = () => {
             <option value="EN_CONFECCION">En confeccion</option>
             <option value="PENDIENTE_CONTROL">Pendiente control</option>
             <option value="FINALIZADA">Finalizadas</option>
+            <option value="ENTREGADA">Entregadas</option>
           </select>
           <select className="input" value={filterMachine} onChange={(e) => setFilterMachine(e.target.value)}>
             <option value="ALL">Todas las maquinas</option>

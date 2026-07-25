@@ -3,7 +3,8 @@ import * as orderService from '../services/orderService';
 
 const getActor = (req: Request) => ({
   userId: req.headers['x-user-id'] ? parseInt(req.headers['x-user-id'] as string, 10) : undefined,
-  role: typeof req.headers['x-user-role'] === 'string' ? req.headers['x-user-role'] : undefined
+  role: typeof req.headers['x-user-role'] === 'string' ? req.headers['x-user-role'] : undefined,
+  machineId: req.headers['x-machine-id'] ? parseInt(req.headers['x-machine-id'] as string, 10) : undefined
 });
 
 export const createOrder = async (req: Request, res: Response) => {
@@ -49,6 +50,16 @@ export const createProcess = async (req: Request, res: Response) => {
   try {
     const process = await orderService.createProcess(req.body);
     res.status(201).json(process);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+export const updateStageAction = async (req: Request, res: Response) => {
+  try {
+    const orderId = parseInt(req.params.id as string);
+    const process = await orderService.updateStageAction(orderId, req.body, getActor(req));
+    res.json(process);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
@@ -136,7 +147,7 @@ export const exportAlegonDetallePalm = async (req: Request, res: Response) => {
 
 export const changeStatus = async (req: Request, res: Response) => {
   try {
-    const order = await orderService.changeStatus(parseInt(req.params.id as string), req.body.status);
+    const order = await orderService.changeStatus(parseInt(req.params.id as string), req.body.status, getActor(req));
     res.json(order);
   } catch (error: any) {
     res.status(400).json({ error: error.message });

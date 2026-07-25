@@ -4,6 +4,7 @@ import { getCurrentUsdExchangeRate, parseExchangeRate } from './exchangeRateServ
 type ActorContext = {
   userId?: number;
   role?: string;
+  machineId?: number;
 };
 
 const parseSafeInt = (val: any) => {
@@ -30,11 +31,25 @@ const ensureAdmin = (actor?: ActorContext) => {
   }
 };
 
+const ensureProductionActor = (actor?: ActorContext) => {
+  const role = normalizeRole(actor?.role);
+  if (role !== 'ADMIN' && role !== 'MACHINE') {
+    throw new Error('Solo administracion o planta puede avanzar una orden');
+  }
+};
+
 const PROCESS_TYPE_LABELS: Record<string, string> = {
   IMPRESION: 'Impresion',
   LAMINACION: 'Laminacion',
   REFILADO: 'Refilado',
   CONFECCION: 'Confeccion'
+};
+
+const PROCESS_APPROVAL_FIELDS: Record<string, string> = {
+  IMPRESION: 'approvedPrinting',
+  LAMINACION: 'approvedLamination',
+  REFILADO: 'approvedRefilado',
+  CONFECCION: 'approvedConfeccion'
 };
 
 const CONSUMPTION_TYPE_TO_PROCESS_TYPE: Record<string, string> = {
@@ -63,7 +78,9 @@ const enrichOrderOperationalState = (order: any) => {
   let operationalStatus = 'PLANIFICADA';
   let currentStage: string | null = null;
 
-  if (order.status === 'Finalizadas') {
+  if (order.status === 'Entregadas') {
+    operationalStatus = 'ENTREGADA';
+  } else if (order.status === 'Finalizadas') {
     operationalStatus = 'FINALIZADA';
   } else if (order.approvedConfeccion) {
     operationalStatus = 'PENDIENTE_CONTROL';
@@ -433,21 +450,46 @@ export const createProcess = async (processData: any) => {
       throw new Error(`Order with ID ${orderId} not found`);
     }
 
-    const process = await tx.productionProcess.create({
-      data: {
+    const existingInProgress = await tx.productionProcess.findFirst({
+      where: {
         orderId: parseInt(orderId),
         type,
-        status: endTime ? 'finalizado' : 'en_proceso',
-        machineId: machineId ? parseInt(machineId) : null,
-        operatorId: operatorId ? parseInt(operatorId) : null,
-        startTime: startTime ? new Date(startTime) : new Date(),
-        endTime: endTime ? new Date(endTime) : null,
-        scrapKg: scrapKg ? parseFloat(scrapKg) : 0,
-        observations,
-      }
+        status: 'en_proceso'
+      },
+      orderBy: { id: 'desc' }
     });
 
-    if (order.status !== 'Finalizadas') {
+    const processPayload = {
+      machineId: machineId ? parseInt(machineId) : existingInProgress?.machineId ?? null,
+      operatorId: operatorId ? parseInt(operatorId) : existingInProgress?.operatorId ?? null,
+      endTime: endTime ? new Date(endTime) : existingInProgress?.endTime ?? null,
+      scrapKg: scrapKg ? parseFloat(scrapKg) : existingInProgress?.scrapKg ?? 0,
+      observations: observations ?? existingInProgress?.observations ?? null,
+    };
+
+    const process = existingInProgress
+      ? await tx.productionProcess.update({
+          where: { id: existingInProgress.id },
+          data: {
+            ...processPayload,
+            status: endTime ? 'finalizado' : existingInProgress.status
+          }
+        })
+      : await tx.productionProcess.create({
+          data: {
+            orderId: parseInt(orderId),
+            type,
+            status: endTime ? 'finalizado' : 'en_proceso',
+            machineId: machineId ? parseInt(machineId) : null,
+            operatorId: operatorId ? parseInt(operatorId) : null,
+            startTime: startTime ? new Date(startTime) : new Date(),
+            endTime: endTime ? new Date(endTime) : null,
+            scrapKg: scrapKg ? parseFloat(scrapKg) : 0,
+            observations,
+          }
+        });
+
+    if (order.status !== 'Finalizadas' && order.status !== 'Entregadas') {
       await tx.productionOrder.update({
         where: { id: order.id },
         data: { status: 'En proceso' }
@@ -520,8 +562,15 @@ export const createProcess = async (processData: any) => {
     }
 
     if (type === 'IMPRESION' && specificData) {
-      await tx.processPrinting.create({
-        data: {
+      await tx.processPrinting.upsert({
+        where: { processId: process.id },
+        update: {
+          exitSense: specificData.exitSense,
+          coilDiameter: specificData.coilDiameter ? parseFloat(specificData.coilDiameter) : null,
+          processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
+          coilCount: specificData.coilCount ? parseInt(specificData.coilCount) : null,
+        },
+        create: {
           processId: process.id,
           exitSense: specificData.exitSense,
           coilDiameter: specificData.coilDiameter ? parseFloat(specificData.coilDiameter) : null,
@@ -530,29 +579,44 @@ export const createProcess = async (processData: any) => {
         }
       });
     } else if (type === 'LAMINACION' && specificData) {
-      await tx.processLamination.create({
-        data: {
+      await tx.processLamination.upsert({
+        where: { processId: process.id },
+        update: {
+          mixProportion: specificData.mixProportion,
+          processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
+        },
+        create: {
           processId: process.id,
           mixProportion: specificData.mixProportion,
           processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
         }
       });
     } else if (type === 'REFILADO' && specificData) {
-      const refilado = await tx.processRefilado.create({
-        data: {
+      const refiladoPayload = {
+        exitSense: specificData.exitSense,
+        tacaRight: specificData.tacaRight,
+        tacaLeft: specificData.tacaLeft,
+        deCabeza: typeof specificData.deCabeza === 'boolean' ? specificData.deCabeza : null,
+        deTripa: typeof specificData.deTripa === 'boolean' ? specificData.deTripa : null,
+        coilDiameter: specificData.coilDiameter ? parseFloat(specificData.coilDiameter) : null,
+        processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
+        coilCount: specificData.coilCount ? parseInt(specificData.coilCount) : null,
+      };
+
+      const refilado = await tx.processRefilado.upsert({
+        where: { processId: process.id },
+        update: refiladoPayload,
+        create: {
           processId: process.id,
-          exitSense: specificData.exitSense,
-          tacaRight: specificData.tacaRight,
-          tacaLeft: specificData.tacaLeft,
-          deCabeza: typeof specificData.deCabeza === 'boolean' ? specificData.deCabeza : null,
-          deTripa: typeof specificData.deTripa === 'boolean' ? specificData.deTripa : null,
-          coilDiameter: specificData.coilDiameter ? parseFloat(specificData.coilDiameter) : null,
-          processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
-          coilCount: specificData.coilCount ? parseInt(specificData.coilCount) : null,
+          ...refiladoPayload,
         }
       });
 
       const outputBobbins = Array.isArray(specificData.outputBobbins) ? specificData.outputBobbins : [];
+      if (outputBobbins.length > 0) {
+        await tx.refiladoOutputBobbin.deleteMany({ where: { refiladoId: refilado.id } });
+      }
+
       for (const bobbin of outputBobbins) {
         const kg = parseFloat(bobbin.kg);
         if (!bobbin.label || isNaN(kg)) continue;
@@ -567,6 +631,104 @@ export const createProcess = async (processData: any) => {
         });
       }
     }
+
+    return process;
+  }, TRANSACTION_OPTIONS);
+};
+
+const getOrderedPlannedStages = (processes: any[] = []) => {
+  const plannedTypes = new Set(processes.map((process: any) => process.type));
+  return ['IMPRESION', 'LAMINACION', 'REFILADO', 'CONFECCION'].filter((stage) => plannedTypes.has(stage));
+};
+
+const isStageComplete = (order: any, stage: string) => {
+  const approvalField = PROCESS_APPROVAL_FIELDS[stage];
+  const latest = getLatestProcessByType(order.processes || [], stage);
+  return Boolean(order?.[approvalField]) || latest?.status === 'finalizado';
+};
+
+const arePlannedStagesComplete = (order: any) => {
+  const plannedStages = getOrderedPlannedStages(order.processes || []);
+  if (plannedStages.length === 0) return false;
+  return plannedStages.every((stage) => isStageComplete(order, stage));
+};
+
+export const updateStageAction = async (orderId: number, data: any, actor?: ActorContext) => {
+  ensureProductionActor(actor);
+
+  const stage = String(data.stage || data.type || '').toUpperCase();
+  const action = String(data.action || '').toUpperCase();
+
+  if (!PROCESS_APPROVAL_FIELDS[stage]) {
+    throw new Error('Etapa invalida');
+  }
+
+  if (!['START', 'FINISH'].includes(action)) {
+    throw new Error('Accion de etapa invalida');
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const order = await tx.productionOrder.findUnique({
+      where: { id: orderId },
+      include: { processes: true }
+    });
+
+    if (!order) throw new Error('Orden no encontrada');
+    if (order.status === 'Finalizadas' || order.status === 'Entregadas') {
+      throw new Error('La orden ya fue cerrada');
+    }
+
+    const plannedProcess = order.processes.find((process: any) => process.type === stage && process.status === 'Planificada');
+    const latestInProgress = order.processes
+      .filter((process: any) => process.type === stage && process.status === 'en_proceso')
+      .sort((a: any, b: any) => (b.startTime?.getTime?.() || 0) - (a.startTime?.getTime?.() || 0))[0];
+
+    if (action === 'START') {
+      if (latestInProgress) {
+        return latestInProgress;
+      }
+
+      const process = await tx.productionProcess.create({
+        data: {
+          orderId,
+          type: stage,
+          status: 'en_proceso',
+          machineId: parseSafeInt(data.machineId) ?? actor?.machineId ?? plannedProcess?.machineId ?? null,
+          operatorId: parseSafeInt(data.operatorId),
+          startTime: new Date(),
+          scrapKg: 0,
+          observations: data.observations || `Inicio de ${PROCESS_TYPE_LABELS[stage]}`
+        }
+      });
+
+      await tx.productionOrder.update({
+        where: { id: orderId },
+        data: { status: 'En proceso' }
+      });
+
+      return process;
+    }
+
+    if (!latestInProgress) {
+      throw new Error(`Primero inicia ${PROCESS_TYPE_LABELS[stage]} antes de marcarla terminada`);
+    }
+
+    const process = await tx.productionProcess.update({
+      where: { id: latestInProgress.id },
+      data: {
+        status: 'finalizado',
+        endTime: new Date(),
+        observations: data.observations || latestInProgress.observations
+      }
+    });
+
+    await tx.productionOrder.update({
+      where: { id: orderId },
+      data: {
+        [PROCESS_APPROVAL_FIELDS[stage]]: true,
+        status: 'En proceso'
+      }
+    });
 
     return process;
   }, TRANSACTION_OPTIONS);
@@ -700,7 +862,7 @@ export const getCostStats = async () => {
 };
 
 export const finalizeOrder = async (id: number, actor?: ActorContext) => {
-  ensureAdmin(actor);
+  ensureProductionActor(actor);
 
   return await prisma.$transaction(async (tx) => {
     const order = await tx.productionOrder.findUnique({
@@ -709,6 +871,12 @@ export const finalizeOrder = async (id: number, actor?: ActorContext) => {
     });
 
     if (!order) throw new Error("Orden no encontrada");
+    if (order.status === 'Entregadas') throw new Error('La orden ya fue entregada');
+    if (order.status === 'Finalizadas') return order;
+
+    if (normalizeRole(actor?.role) === 'MACHINE' && !arePlannedStagesComplete(order)) {
+      throw new Error('Para marcar producto terminado, primero deben completarse todas las etapas planificadas');
+    }
 
     // Update order status
     const updatedOrder = await tx.productionOrder.update({
@@ -1173,7 +1341,9 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
   }, TRANSACTION_OPTIONS);
 };
 
-export const changeStatus = async (id: number, newStatus: string) => {
+export const changeStatus = async (id: number, newStatus: string, actor?: ActorContext) => {
+  ensureAdmin(actor);
+
   const validStatuses = ['Órdenes por realizar', 'En proceso', 'Finalizadas', 'Entregadas'];
   if (!validStatuses.includes(newStatus)) {
     throw new Error(`Estado inválido: ${newStatus}`);
@@ -1186,10 +1356,55 @@ export const changeStatus = async (id: number, newStatus: string) => {
     throw new Error('Solo se puede marcar como Entregada una orden Finalizada');
   }
 
-  return await prisma.productionOrder.update({
-    where: { id },
-    data: { status: newStatus }
-  });
+  return await prisma.$transaction(async (tx) => {
+    if (newStatus === 'Entregadas') {
+      const orderWithProducts = await tx.productionOrder.findUnique({
+        where: { id },
+        include: { products: true }
+      });
+
+      const fallbackProductId = orderWithProducts?.productId ?? orderWithProducts?.products?.[0]?.productId ?? null;
+      const fallbackPlannedQty = orderWithProducts?.plannedQty ?? orderWithProducts?.products?.[0]?.plannedQty ?? null;
+      const qtyDelivered = parseSafeFloat(fallbackPlannedQty?.replace(/[^0-9.]/g, '')) || 0;
+
+      if (fallbackProductId && qtyDelivered > 0) {
+        await tx.currentStock.upsert({
+          where: { productId: fallbackProductId },
+          update: {
+            stockActual: { decrement: qtyDelivered },
+            lastUpdate: new Date(),
+            updateSource: `Entrega orden ${order.orderNumber}`
+          },
+          create: {
+            productId: fallbackProductId,
+            stockActual: -qtyDelivered,
+            itemType: 'PRODUCTO',
+            unit: order.unit,
+            lastUpdate: new Date(),
+            updateSource: `Entrega orden ${order.orderNumber}`
+          }
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            type: 'EGRESO',
+            itemType: 'PRODUCTO',
+            productId: fallbackProductId,
+            qty: qtyDelivered,
+            unit: order.unit,
+            sign: -1,
+            orderId: order.id,
+            observations: `Producto entregado de orden ${order.orderNumber}`
+          }
+        });
+      }
+    }
+
+    return await tx.productionOrder.update({
+      where: { id },
+      data: { status: newStatus }
+    });
+  }, TRANSACTION_OPTIONS);
 };
 
 // ---- Checklist CRUD ----
