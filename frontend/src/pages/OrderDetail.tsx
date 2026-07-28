@@ -34,6 +34,36 @@ const DEFAULT_CHECKLIST_ITEMS = [
 
 const getStageLabel = (stage: string) => STAGES.find((item) => item.value === stage)?.label || stage;
 
+const getLogDurationMinutes = (log: any) => {
+  const start = new Date(log.startTime).getTime();
+  const end = new Date(log.endTime).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  return Math.round((end - start) / 60000);
+};
+
+const formatDuration = (minutes: number) => {
+  if (!minutes) return '0 min';
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours && remainingMinutes) return `${hours} h ${remainingMinutes} min`;
+  if (hours) return `${hours} h`;
+  return `${remainingMinutes} min`;
+};
+
+const formatLogDate = (value: string) => new Intl.DateTimeFormat('es-AR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  timeZone: 'UTC'
+}).format(new Date(value));
+
+const formatLogTime = (value: string) => new Intl.DateTimeFormat('es-AR', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+  timeZone: 'UTC'
+}).format(new Date(value));
+
 export const OrderDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [order, setOrder] = useState<any>(null);
@@ -496,6 +526,24 @@ export const OrderDetail: React.FC = () => {
                     </div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.25rem 0' }}>Maq: {p.machine?.name} - Op: {p.operator?.firstName}</p>
 
+                    {p.timeLogs && p.timeLogs.length > 0 && (
+                      <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.25rem' }}>
+                          Horas trabajadas: {formatDuration(p.timeLogs.reduce((acc: number, log: any) => acc + getLogDurationMinutes(log), 0))}
+                        </p>
+                        {p.timeLogs.map((log: any) => (
+                          <div key={log.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.75rem', fontSize: '0.7rem', color: 'var(--text-muted)', padding: '0.2rem 0' }}>
+                            <span>
+                              {log.operator ? `${log.operator.firstName} ${log.operator.lastName}` : 'Sin operario'} - {log.description || 'Sin descripcion'}
+                            </span>
+                            <span>
+                              {formatLogDate(log.date)} {formatLogTime(log.startTime)}-{formatLogTime(log.endTime)} ({formatDuration(getLogDurationMinutes(log))})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {p.materialLots && p.materialLots.length > 0 && (
                       <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                         <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.25rem' }}>Lotes de Material:</p>
@@ -505,6 +553,20 @@ export const OrderDetail: React.FC = () => {
                             <span>{l.kg || 0} kg / {l.totalUsedMeters} m</span>
                           </div>
                         ))}
+                      </div>
+                    )}
+
+                    {p.refiladoData && (
+                      <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'grid', gap: '0.2rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        <p style={{ fontWeight: 700, color: 'var(--primary)', marginBottom: '0.25rem' }}>Datos refiladora:</p>
+                        <span>Sentido salida cliente: {p.refiladoData.exitSense || '-'}</span>
+                        <span>Taca der/izq: {p.refiladoData.tacaRight || '-'} / {p.refiladoData.tacaLeft || '-'}</span>
+                        <span>De pie: {p.refiladoData.dePie ? 'Si' : 'No'} | De cabeza: {p.refiladoData.deCabeza ? 'Si' : 'No'}</span>
+                        <span>Ancho espira: {p.refiladoData.anchoEspira ?? '-'}</span>
+                        <span>Diametro bobina: {p.refiladoData.coilDiameter ?? '-'} | Metros: {p.refiladoData.processedMeters ?? '-'}</span>
+                        <span>Control salida: {p.refiladoData.controlName || '-'} | Taca der-izq: {p.refiladoData.tacaDerIzq || '-'}</span>
+                        <span>Ancho espira salida: {p.refiladoData.finalAnchoEspira ?? '-'} | Sentido salida final: {p.refiladoData.finalExitSense || '-'}</span>
+                        <span>Cantidad bobinas: {p.refiladoData.coilCount ?? '-'} | Nombre: {p.refiladoData.bobbinCountName || '-'}</span>
                       </div>
                     )}
 

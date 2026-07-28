@@ -180,12 +180,18 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
   };
 
   const getConsumptionsData = () => {
+    const shouldSendRow = (item: any) => {
+      const hasMovement = item.realQty !== 0 || String(item.loads || '').trim().length > 0;
+      const hasIdentifiableSupply = Boolean(item.supplyId) || String(item.colorName || item.name || '').trim().length > 0;
+      return hasMovement && hasIdentifiableSupply;
+    };
+
     return {
       type: activeTab,
       realMeters: realMeters ? parseFloat(realMeters) : undefined,
       exchangeRate: parseNumber(exchangeRate) || undefined,
       consumptions: activeTab === 'PRINTING' 
-        ? printingColors.filter(c => c.realQty !== 0 || c.loads).map(c => ({
+        ? printingColors.filter(shouldSendRow).map(c => ({
             colorId: c.id,
             colorName: c.colorName,
             supplyId: c.supplyId,
@@ -194,7 +200,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
             realQty: c.realQty,
             unit: 'kg'
           }))
-        : laminationSupplies.filter(c => c.realQty !== 0 || c.loads).map(c => ({
+        : laminationSupplies.filter(shouldSendRow).map(c => ({
             colorName: c.name,
             supplyId: c.supplyId,
             loads: c.loads,
@@ -219,6 +225,11 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
     setSuccess(false);
     
     const dataToSend = getConsumptionsData();
+    if (dataToSend.consumptions.length === 0 && !dataToSend.realMeters) {
+      alert('No hay consumos validos para guardar. Selecciona un insumo antes de confirmar.');
+      setLoading(false);
+      return;
+    }
 
     try {
       await api.post(`/orders/${order.id}/consumptions`, dataToSend);
@@ -227,9 +238,9 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
         setSuccess(false);
         if (onUpdate) onUpdate();
       }, 2000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving consumptions', error);
-      alert('Error al guardar consumos');
+      alert(error?.response?.data?.error || 'Error al guardar consumos');
     } finally {
       setLoading(false);
     }

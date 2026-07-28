@@ -15,6 +15,46 @@ const STAGES: { key: StageType; label: string; icon: LucideIcon }[] = [
   { key: 'CONFECCION', label: 'Confeccion', icon: PackageCheck }
 ];
 
+const getLogDurationMinutes = (log: any) => {
+  const start = new Date(log.startTime).getTime();
+  const end = new Date(log.endTime).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  return Math.round((end - start) / 60000);
+};
+
+const getInputDurationMinutes = (startTime: string, endTime: string) => {
+  if (!startTime || !endTime) return 0;
+  const [startHours, startMinutes] = startTime.split(':').map(Number);
+  const [endHours, endMinutes] = endTime.split(':').map(Number);
+  if ([startHours, startMinutes, endHours, endMinutes].some((value) => Number.isNaN(value))) return 0;
+  const startTotal = startHours * 60 + startMinutes;
+  const endTotal = endHours * 60 + endMinutes;
+  return endTotal > startTotal ? endTotal - startTotal : 0;
+};
+
+const formatDuration = (minutes: number) => {
+  if (!minutes) return '0 min';
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours && remainingMinutes) return `${hours} h ${remainingMinutes} min`;
+  if (hours) return `${hours} h`;
+  return `${remainingMinutes} min`;
+};
+
+const formatLogDate = (value: string) => new Intl.DateTimeFormat('es-AR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  timeZone: 'UTC'
+}).format(new Date(value));
+
+const formatLogTime = (value: string) => new Intl.DateTimeFormat('es-AR', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+  timeZone: 'UTC'
+}).format(new Date(value));
+
 const createInitialStageData = () => ({
   machineId: '',
   operatorId: '',
@@ -27,8 +67,15 @@ const createInitialStageData = () => ({
   observations: '',
   tacaRight: '',
   tacaLeft: '',
+  dePie: false,
   deCabeza: false,
-  deTripa: false
+  deTripa: false,
+  anchoEspira: '',
+  controlName: '',
+  tacaDerIzq: '',
+  finalAnchoEspira: '',
+  finalExitSense: '',
+  bobbinCountName: ''
 });
 
 const createInitialMaterialLot = () => ({
@@ -155,6 +202,12 @@ export const ProductionProcess: React.FC = () => {
     const stageProcess = selectedOrder?.processes?.filter((process: any) => process.type === activeStage) || [];
     return stageProcess.flatMap((process: any) => process.timeLogs || []);
   }, [activeStage, selectedOrder]);
+  const currentStageTotalMinutes = useMemo(() => (
+    currentStageLogs.reduce((acc: number, log: any) => acc + getLogDurationMinutes(log), 0)
+  ), [currentStageLogs]);
+  const currentInputDurationMinutes = useMemo(() => (
+    getInputDurationMinutes(timeLogData.startTime, timeLogData.endTime)
+  ), [timeLogData.startTime, timeLogData.endTime]);
   const plannedStages = useMemo(() => {
     const processTypes = new Set((selectedOrder?.processes || []).map((process: any) => process.type));
     return STAGES.map((stage) => stage.key).filter((stage) => processTypes.has(stage));
@@ -345,11 +398,17 @@ export const ProductionProcess: React.FC = () => {
           exitSense: stageData.exitSense || undefined,
           tacaRight: stageData.tacaRight || undefined,
           tacaLeft: stageData.tacaLeft || undefined,
+          dePie: stageData.dePie,
           deCabeza: stageData.deCabeza,
-          deTripa: stageData.deTripa,
+          anchoEspira: stageData.anchoEspira || undefined,
           coilDiameter: stageData.coilDiameter || undefined,
           processedMeters: stageData.processedMeters || undefined,
           coilCount: stageData.coilCount || undefined,
+          controlName: stageData.controlName || undefined,
+          tacaDerIzq: stageData.tacaDerIzq || undefined,
+          finalAnchoEspira: stageData.finalAnchoEspira || undefined,
+          finalExitSense: stageData.finalExitSense || undefined,
+          bobbinCountName: stageData.bobbinCountName || undefined,
           outputBobbins: refiladoOutputBobbins
             .filter((bobbin) => bobbin.kg)
             .map((bobbin, index) => ({
@@ -661,7 +720,11 @@ export const ProductionProcess: React.FC = () => {
                     <input name="tacaLeft" value={stageData.tacaLeft} onChange={handleInputChange} type="text" className="input" />
                   </div>
                   <div>
-                    <label className="label">Diametro bobina</label>
+                    <label className="label">Ancho espira</label>
+                    <input name="anchoEspira" value={stageData.anchoEspira} onChange={handleInputChange} type="number" className="input" placeholder="0" />
+                  </div>
+                  <div>
+                    <label className="label">Diametro bobinas CMM</label>
                     <input name="coilDiameter" value={stageData.coilDiameter} onChange={handleInputChange} type="number" className="input" />
                   </div>
                   <div>
@@ -674,9 +737,34 @@ export const ProductionProcess: React.FC = () => {
                       De cabeza
                     </label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input type="checkbox" name="deTripa" checked={stageData.deTripa} onChange={handleInputChange} />
-                      De tripa
+                      <input type="checkbox" name="dePie" checked={stageData.dePie} onChange={handleInputChange} />
+                      De pie
                     </label>
+                  </div>
+                  <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.75rem' }}>Control de salida refiladora</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+                      <div>
+                        <label className="label">Nombre control</label>
+                        <input name="controlName" value={stageData.controlName} onChange={handleInputChange} type="text" className="input" />
+                      </div>
+                      <div>
+                        <label className="label">Taca der-izq</label>
+                        <input name="tacaDerIzq" value={stageData.tacaDerIzq} onChange={handleInputChange} type="text" className="input" />
+                      </div>
+                      <div>
+                        <label className="label">Ancho espira salida</label>
+                        <input name="finalAnchoEspira" value={stageData.finalAnchoEspira} onChange={handleInputChange} type="number" className="input" />
+                      </div>
+                      <div>
+                        <label className="label">Sentido de salida final</label>
+                        <input name="finalExitSense" value={stageData.finalExitSense} onChange={handleInputChange} type="text" className="input" />
+                      </div>
+                      <div>
+                        <label className="label">Nombre</label>
+                        <input name="bobbinCountName" value={stageData.bobbinCountName} onChange={handleInputChange} type="text" className="input" />
+                      </div>
+                    </div>
                   </div>
                 </>
               )}
@@ -837,9 +925,20 @@ export const ProductionProcess: React.FC = () => {
           </div>
 
           <div className="card" style={{ marginTop: '1.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-              <TimerReset size={20} color="var(--primary)" />
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0 }}>Paradas y tiempos de {activeStage.toLowerCase()}</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                <TimerReset size={20} color="var(--primary)" />
+                <div>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0 }}>Horas trabajadas / paradas de {activeStage.toLowerCase()}</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                    Carga una fila por cada tramo trabajado, parada o reanudacion. Puede haber varios dias y distintos operarios.
+                  </p>
+                </div>
+              </div>
+              <div style={{ background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '12px', padding: '0.75rem 1rem', minWidth: '180px' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Total etapa</p>
+                <strong style={{ color: 'var(--primary)', fontSize: '1.25rem' }}>{formatDuration(currentStageTotalMinutes)}</strong>
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
@@ -876,9 +975,13 @@ export const ProductionProcess: React.FC = () => {
               </div>
             </div>
 
+            <div style={{ marginTop: '0.85rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              Duracion de esta fila: <strong style={{ color: currentInputDurationMinutes ? 'var(--primary)' : 'var(--text-muted)' }}>{formatDuration(currentInputDurationMinutes)}</strong>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
               <button onClick={handleSaveTimeLog} disabled={savingTimeLog} className="btn btn-primary">
-                {savingTimeLog ? 'Guardando...' : 'Guardar Tiempo'}
+                {savingTimeLog ? 'Guardando...' : 'Guardar horas'}
               </button>
             </div>
 
@@ -891,10 +994,12 @@ export const ProductionProcess: React.FC = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
                       <strong>{log.operator ? `${log.operator.firstName} ${log.operator.lastName}` : 'Sin operario'}</strong>
                       <span style={{ color: 'var(--text-muted)' }}>
-                        {new Date(log.date).toLocaleDateString()} {new Date(log.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(log.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatLogDate(log.date)} {formatLogTime(log.startTime)} - {formatLogTime(log.endTime)}
                       </span>
                     </div>
-                    <p style={{ marginTop: '0.35rem', color: 'var(--text-muted)' }}>{log.description || 'Sin descripcion'}</p>
+                    <p style={{ marginTop: '0.35rem', color: 'var(--text-muted)' }}>
+                      {log.description || 'Sin descripcion'} - Duracion: <strong>{formatDuration(getLogDurationMinutes(log))}</strong>
+                    </p>
                   </div>
                 ))
               )}

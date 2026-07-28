@@ -243,18 +243,25 @@ model ProcessLamination {
 }
 
 model ProcessRefilado {
-  id              Int                    @id @default(autoincrement())
-  processId       Int                    @unique
-  exitSense       String?
-  tacaRight       String?
-  tacaLeft        String?
-  deCabeza        Boolean?
-  deTripa         Boolean?
-  coilDiameter    Float?
-  processedMeters Float?
-  coilCount       Int?
-  process         ProductionProcess      @relation(fields: [processId], references: [id])
-  outputBobbins   RefiladoOutputBobbin[]
+  id               Int                    @id @default(autoincrement())
+  processId        Int                    @unique
+  exitSense        String?
+  tacaRight        String?
+  tacaLeft         String?
+  dePie            Boolean?
+  deCabeza         Boolean?
+  deTripa          Boolean?
+  anchoEspira      Float?
+  coilDiameter     Float?
+  processedMeters  Float?
+  coilCount        Int?
+  controlName      String?
+  tacaDerIzq       String?
+  finalAnchoEspira Float?
+  finalExitSense   String?
+  bobbinCountName  String?
+  process          ProductionProcess      @relation(fields: [processId], references: [id])
+  outputBobbins    RefiladoOutputBobbin[]
 }
 
 model RefiladoOutputBobbin {

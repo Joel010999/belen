@@ -596,11 +596,18 @@ export const createProcess = async (processData: any) => {
         exitSense: specificData.exitSense,
         tacaRight: specificData.tacaRight,
         tacaLeft: specificData.tacaLeft,
+        dePie: typeof specificData.dePie === 'boolean' ? specificData.dePie : null,
         deCabeza: typeof specificData.deCabeza === 'boolean' ? specificData.deCabeza : null,
-        deTripa: typeof specificData.deTripa === 'boolean' ? specificData.deTripa : null,
+        deTripa: typeof specificData.deTripa === 'boolean' ? specificData.deTripa : undefined,
+        anchoEspira: specificData.anchoEspira ? parseFloat(specificData.anchoEspira) : null,
         coilDiameter: specificData.coilDiameter ? parseFloat(specificData.coilDiameter) : null,
         processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
         coilCount: specificData.coilCount ? parseInt(specificData.coilCount) : null,
+        controlName: specificData.controlName,
+        tacaDerIzq: specificData.tacaDerIzq,
+        finalAnchoEspira: specificData.finalAnchoEspira ? parseFloat(specificData.finalAnchoEspira) : null,
+        finalExitSense: specificData.finalExitSense,
+        bobbinCountName: specificData.bobbinCountName,
       };
 
       const refilado = await tx.processRefilado.upsert({
@@ -968,7 +975,15 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
           materialLots: true,
           printingData: true,
           laminationData: true,
-          refiladoData: { include: { outputBobbins: true } }
+          refiladoData: { include: { outputBobbins: true } },
+          timeLogs: {
+            include: {
+              operator: true
+            },
+            orderBy: {
+              startTime: 'asc'
+            }
+          }
         }
       }
     },
@@ -1005,15 +1020,34 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
     'Etapa Impresión - Metros',
     'Etapa Impresión - Scrap (Kg)',
     'Etapa Impresión - Lotes',
+    'Etapa Impresión - Tiempos',
+    'Etapa Impresión - Total Horas',
     'Etapa Laminación - Máquina',
     'Etapa Laminación - Operario',
     'Etapa Laminación - Metros',
     'Etapa Laminación - Scrap (Kg)',
     'Etapa Laminación - Lotes',
+    'Etapa Laminación - Tiempos',
+    'Etapa Laminación - Total Horas',
     'Etapa Refilado - Máquina',
     'Etapa Refilado - Operario',
     'Etapa Refilado - Metros',
-    'Etapa Refilado - Scrap (Kg)'
+    'Etapa Refilado - Scrap (Kg)',
+    'Etapa Refilado - Tiempos',
+    'Etapa Refilado - Total Horas',
+    'Etapa Refilado - Sentido Salida Cliente',
+    'Etapa Refilado - Taca Derecha',
+    'Etapa Refilado - Taca Izquierda',
+    'Etapa Refilado - De Pie',
+    'Etapa Refilado - De Cabeza',
+    'Etapa Refilado - Ancho Espira',
+    'Etapa Refilado - Diametro Bobinas CMM',
+    'Etapa Refilado - Cantidad Bobinas',
+    'Etapa Refilado - Nombre Control',
+    'Etapa Refilado - Taca Der-Izq',
+    'Etapa Refilado - Ancho Espira Salida',
+    'Etapa Refilado - Sentido Salida Final',
+    'Etapa Refilado - Nombre'
   ].join(';');
 
   const rows = orders.map(o => {
@@ -1024,6 +1058,37 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
     const formatLots = (proc: any) => {
       if (!proc?.materialLots || proc.materialLots.length === 0) return '-';
       return proc.materialLots.map((l: any) => `Lote:${l.lotNumber} ${l.totalUsedMeters}m`).join(', ');
+    };
+
+    const padTime = (value: number) => String(value).padStart(2, '0');
+    const formatLogDate = (value: any) => {
+      const date = new Date(value);
+      if (isNaN(date.getTime())) return '-';
+      return `${padTime(date.getUTCDate())}/${padTime(date.getUTCMonth() + 1)}/${date.getUTCFullYear()}`;
+    };
+    const formatLogTime = (value: any) => {
+      const date = new Date(value);
+      if (isNaN(date.getTime())) return '-';
+      return `${padTime(date.getUTCHours())}:${padTime(date.getUTCMinutes())}`;
+    };
+    const getDurationMinutes = (log: any) => {
+      const start = new Date(log.startTime).getTime();
+      const end = new Date(log.endTime).getTime();
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+      return Math.round((end - start) / 60000);
+    };
+    const formatTimeLogs = (proc: any) => {
+      if (!proc?.timeLogs || proc.timeLogs.length === 0) return '-';
+      return proc.timeLogs.map((log: any) => {
+        const operator = log.operator ? `${log.operator.firstName} ${log.operator.lastName}` : 'Sin operario';
+        const duration = (getDurationMinutes(log) / 60).toFixed(2);
+        return `${formatLogDate(log.date)} ${formatLogTime(log.startTime)}-${formatLogTime(log.endTime)} ${duration}h ${operator} ${log.description || ''}`.trim();
+      }).join(' | ');
+    };
+    const formatTotalHours = (proc: any) => {
+      if (!proc?.timeLogs || proc.timeLogs.length === 0) return '-';
+      const minutes = proc.timeLogs.reduce((acc: number, log: any) => acc + getDurationMinutes(log), 0);
+      return (minutes / 60).toFixed(2);
     };
 
     let productoCantidadUsada = 0;
@@ -1080,15 +1145,34 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
       impresion?.printingData?.processedMeters || '-',
       impresion?.scrapKg ?? '-',
       formatLots(impresion),
+      formatTimeLogs(impresion),
+      formatTotalHours(impresion),
       laminacion?.machine?.name || '-',
       laminacion?.operator ? `${laminacion.operator.firstName} ${laminacion.operator.lastName}` : '-',
       laminacion?.laminationData?.processedMeters || '-',
       laminacion?.scrapKg ?? '-',
       formatLots(laminacion),
+      formatTimeLogs(laminacion),
+      formatTotalHours(laminacion),
       refilado?.machine?.name || '-',
       refilado?.operator ? `${refilado.operator.firstName} ${refilado.operator.lastName}` : '-',
       refilado?.refiladoData?.processedMeters || '-',
-      refilado?.scrapKg ?? '-'
+      refilado?.scrapKg ?? '-',
+      formatTimeLogs(refilado),
+      formatTotalHours(refilado),
+      refilado?.refiladoData?.exitSense || '-',
+      refilado?.refiladoData?.tacaRight || '-',
+      refilado?.refiladoData?.tacaLeft || '-',
+      refilado?.refiladoData ? (refilado.refiladoData.dePie ? 'Si' : 'No') : '-',
+      refilado?.refiladoData ? (refilado.refiladoData.deCabeza ? 'Si' : 'No') : '-',
+      refilado?.refiladoData?.anchoEspira ?? '-',
+      refilado?.refiladoData?.coilDiameter ?? '-',
+      refilado?.refiladoData?.coilCount ?? '-',
+      refilado?.refiladoData?.controlName || '-',
+      refilado?.refiladoData?.tacaDerIzq || '-',
+      refilado?.refiladoData?.finalAnchoEspira ?? '-',
+      refilado?.refiladoData?.finalExitSense || '-',
+      refilado?.refiladoData?.bobbinCountName || '-'
     ].map(val => `"${val}"`).join(';');
   });
 
@@ -1608,7 +1692,8 @@ export const saveFinalInspection = async (data: any, actor?: ActorContext) => {
 };
 
 export const registerConsumptions = async (orderId: number, data: any) => {
-  const { type, consumptions, realMeters } = data;
+  const { type, realMeters } = data;
+  const consumptions = Array.isArray(data?.consumptions) ? data.consumptions : [];
   const postedExchangeRate = parseExchangeRate(data?.exchangeRate);
   const exchangeRateResult = postedExchangeRate
     ? { rate: postedExchangeRate }
@@ -1626,6 +1711,10 @@ export const registerConsumptions = async (orderId: number, data: any) => {
             cons.supplyId = supply.id;
           }
         }
+      }
+
+      if (!cons.supplyId) {
+        continue;
       }
 
       if (cons.supplyId) {
@@ -1710,18 +1799,6 @@ export const registerConsumptions = async (orderId: number, data: any) => {
             }
           });
         }
-      } else {
-         // If still no supplyId, but it's a printing color, we update ProcessPrintingColor if possible
-         if (type === 'PRINTING' && cons.colorId) {
-            await tx.processPrintingColor.update({
-               where: { id: parseInt(cons.colorId) },
-               data: {
-                  endValue: cons.endValue ? parseFloat(cons.endValue) : null, // Assuming endValue here means "sobrante" or "fin" based on their terminology, but let's just save the text in observations
-                  diffValue: cons.endValue ? parseFloat(cons.endValue) : null,
-                  calcValue: parseFloat(cons.realQty)
-               }
-            });
-         }
       }
     }
 
