@@ -76,6 +76,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
             sequence: c.sequence,
             colorName: c.colorName,
             supplyId: c.supplyId || c.insumoId,
+            lotNumber: existing?.lotNumber || c.lotNumber || '',
             loads: existing?.loads || '',
             endValue: existing?.endValue || '',
             realQty: existing?.realQty || 0
@@ -87,9 +88,9 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
     setLaminationSupplies(prev => {
       if (prev.length > 0) return prev;
       return [
-        { name: 'Adhesivo', supplyId: null, loads: '', endValue: '', realQty: 0 },
-        { name: 'Solvente', supplyId: null, loads: '', endValue: '', realQty: 0 },
-        { name: 'Reticulante', supplyId: null, loads: '', endValue: '', realQty: 0 }
+        { name: 'Adhesivo', supplyId: null, lotNumber: '', loads: '', endValue: '', realQty: 0 },
+        { name: 'Solvente', supplyId: null, lotNumber: '', loads: '', endValue: '', realQty: 0 },
+        { name: 'Reticulante', supplyId: null, lotNumber: '', loads: '', endValue: '', realQty: 0 }
       ];
     });
   }, [order?.colorOrders]);
@@ -119,6 +120,11 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
     const supply = supplies.find((s) => s.id === item.supplyId);
     const price = Number(supply?.price);
     return Number.isFinite(price) ? price : 0;
+  };
+
+  const getSupplyCode = (item: any) => {
+    const supply = supplies.find((s) => s.id === item.supplyId);
+    return supply?.code || '-';
   };
 
   const getItemCostUsd = (item: any) => {
@@ -173,9 +179,9 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
 
   const addRow = () => {
     if (activeTab === 'PRINTING') {
-      setPrintingColors(prev => [...prev, { colorName: '', supplyId: null, loads: '', endValue: '', realQty: 0 }]);
+      setPrintingColors(prev => [...prev, { colorName: '', supplyId: null, lotNumber: '', loads: '', endValue: '', realQty: 0 }]);
     } else {
-      setLaminationSupplies(prev => [...prev, { name: '', supplyId: null, loads: '', endValue: '', realQty: 0 }]);
+      setLaminationSupplies(prev => [...prev, { name: '', supplyId: null, lotNumber: '', loads: '', endValue: '', realQty: 0 }]);
     }
   };
 
@@ -195,6 +201,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
             colorId: c.id,
             colorName: c.colorName,
             supplyId: c.supplyId,
+            lotNumber: c.lotNumber,
             loads: c.loads,
             endValue: c.endValue,
             realQty: c.realQty,
@@ -203,6 +210,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
         : laminationSupplies.filter(shouldSendRow).map(c => ({
             colorName: c.name,
             supplyId: c.supplyId,
+            lotNumber: c.lotNumber,
             loads: c.loads,
             endValue: c.endValue,
             realQty: c.realQty,
@@ -328,6 +336,8 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
               <th style={{ padding: '0.75rem' }}>Insumo / Color</th>
+              <th style={{ padding: '0.75rem' }}>Codigo</th>
+              <th style={{ padding: '0.75rem' }}>Lote</th>
               <th style={{ padding: '0.75rem' }}>Cargas (ej. 25+20)</th>
               <th style={{ padding: '0.75rem' }}>Diferencia / Fin</th>
               <th style={{ padding: '0.75rem', textAlign: 'right' }}>Consumo Real</th>
@@ -369,6 +379,19 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
                       <option key={s.id} value={s.id}>{s.name} {s.code ? `(${s.code})` : ''}</option>
                     ))}
                   </select>
+                </td>
+                <td style={{ padding: '0.75rem', fontWeight: 800, color: 'var(--text-muted)' }}>
+                  {getSupplyCode(item)}
+                </td>
+                <td style={{ padding: '0.75rem' }}>
+                  <input
+                    type="text"
+                    value={item.lotNumber || ''}
+                    onChange={(e) => activeTab === 'PRINTING' ? handlePrintingChange(idx, 'lotNumber', e.target.value) : handleLaminationChange(idx, 'lotNumber', e.target.value)}
+                    placeholder="Lote"
+                    className="input-field"
+                    style={{ width: '120px', padding: '0.6rem', fontSize: '0.9rem', backgroundColor: 'rgba(0,0,0,0.2)' }}
+                  />
                 </td>
                 <td style={{ padding: '0.75rem' }}>
                   <input 
@@ -450,6 +473,8 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
               <thead>
                 <tr style={{ textAlign: 'left', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '0.6rem' }}>Insumo</th>
+                  <th style={{ padding: '0.6rem' }}>Codigo</th>
+                  <th style={{ padding: '0.6rem' }}>Lote</th>
                   <th style={{ padding: '0.6rem', textAlign: 'right' }}>Kg</th>
                   <th style={{ padding: '0.6rem', textAlign: 'right' }}>Precio USD</th>
                   <th style={{ padding: '0.6rem', textAlign: 'right' }}>Subtotal USD</th>
@@ -461,6 +486,8 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
                 {savedConsumptions.map((consumption: any) => (
                   <tr key={consumption.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     <td style={{ padding: '0.6rem' }}>{consumption.supply?.name || `Insumo ${consumption.supplyId}`}</td>
+                    <td style={{ padding: '0.6rem', color: 'var(--text-muted)' }}>{consumption.supply?.code || '-'}</td>
+                    <td style={{ padding: '0.6rem', color: 'var(--text-muted)' }}>{consumption.lotNumber || '-'}</td>
                     <td style={{ padding: '0.6rem', textAlign: 'right', color: consumption.realQty < 0 ? 'var(--success)' : 'var(--text-main)' }}>{Number(consumption.realQty || 0).toFixed(2)} {consumption.unit || 'kg'}</td>
                     <td style={{ padding: '0.6rem', textAlign: 'right' }}>{consumption.unitPrice ? formatCurrency(Number(consumption.unitPrice), 'USD') : '-'}</td>
                     <td style={{ padding: '0.6rem', textAlign: 'right' }}>{consumption.calculatedCost ? formatCurrency(Number(consumption.calculatedCost), 'USD') : '-'}</td>

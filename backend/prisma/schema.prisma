@@ -105,23 +105,31 @@ model OrderOperator {
 }
 
 model TechnicalSpec {
-  id               Int             @id @default(autoincrement())
-  orderId          Int             @unique
-  materialMeasure  String?
-  cut              String?
-  lamina           String?
-  meters           Float?
-  tube             String?
-  colorCount       Int?
-  pie              String?
-  designName       String?
-  cabeza           String?
-  printingType     String?
-  tacaRight        String?
-  tacaLeft         String?
-  clisheAlignment  String?
-  techObservations String?
-  order            ProductionOrder @relation(fields: [orderId], references: [id])
+  id                   Int             @id @default(autoincrement())
+  orderId              Int             @unique
+  materialMeasure      String?
+  cut                  String?
+  lamina               String?
+  meters               Float?
+  tube                 String?
+  colorCount           Int?
+  pie                  String?
+  designName           String?
+  cabeza               String?
+  printingType         String?
+  tacaRight            String?
+  tacaLeft             String?
+  clisheAlignment      String?
+  techObservations     String?
+  refiladoExitSense    String?
+  refiladoDePie        Boolean?
+  refiladoDeCabeza     Boolean?
+  refiladoTacaRight    String?
+  refiladoTacaLeft     String?
+  refiladoAnchoEspira  Float?
+  refiladoCoilDiameter Float?
+  refiladoMeters       Float?
+  order                ProductionOrder @relation(fields: [orderId], references: [id])
 }
 
 model ColorOrder {
@@ -141,6 +149,7 @@ model Consumption {
   id                Int             @id @default(autoincrement())
   orderId           Int
   supplyId          Int
+  lotNumber         String?
   plannedQty        Float
   realQty           Float           @default(0)
   unit              String
@@ -162,7 +171,7 @@ model SystemSetting {
 }
 
 model ProductionProcess {
-  id             Int                @id @default(autoincrement())
+  id             Int                 @id @default(autoincrement())
   orderId        Int
   type           String
   status         String
@@ -170,16 +179,27 @@ model ProductionProcess {
   operatorId     Int?
   startTime      DateTime?
   endTime        DateTime?
-  scrapKg        Float              @default(0)
+  scrapKg        Float               @default(0)
   observations   String?
   materialLots   MaterialLot[]
   laminationData ProcessLamination?
   printingData   ProcessPrinting?
   refiladoData   ProcessRefilado?
+  confeccionData ProcessConfeccion?
   timeLogs       ProcessTimeLog[]
-  operator       Operator?          @relation(fields: [operatorId], references: [id])
-  machine        Machine?           @relation(fields: [machineId], references: [id])
-  order          ProductionOrder    @relation(fields: [orderId], references: [id])
+  scrapEntries   ProcessScrapEntry[]
+  operator       Operator?           @relation(fields: [operatorId], references: [id])
+  machine        Machine?            @relation(fields: [machineId], references: [id])
+  order          ProductionOrder     @relation(fields: [orderId], references: [id])
+}
+
+model ProcessScrapEntry {
+  id          Int               @id @default(autoincrement())
+  processId   Int
+  kg          Float
+  description String?
+  createdAt   DateTime          @default(now())
+  process     ProductionProcess @relation(fields: [processId], references: [id], onDelete: Cascade)
 }
 
 model ProcessTimeLog {
@@ -265,13 +285,32 @@ model ProcessRefilado {
 }
 
 model RefiladoOutputBobbin {
-  id         Int             @id @default(autoincrement())
-  refiladoId Int
-  label      String
-  kg         Float
-  notes      String?
-  createdAt  DateTime        @default(now())
-  refilado   ProcessRefilado @relation(fields: [refiladoId], references: [id], onDelete: Cascade)
+  id          Int             @id @default(autoincrement())
+  refiladoId  Int
+  label       String
+  productName String?
+  kg          Float
+  notes       String?
+  createdAt   DateTime        @default(now())
+  refilado    ProcessRefilado @relation(fields: [refiladoId], references: [id], onDelete: Cascade)
+}
+
+model ProcessConfeccion {
+  id        Int                       @id @default(autoincrement())
+  processId Int                       @unique
+  process   ProductionProcess         @relation(fields: [processId], references: [id])
+  outputs   ProcessConfeccionOutput[]
+}
+
+model ProcessConfeccionOutput {
+  id           Int               @id @default(autoincrement())
+  confeccionId Int
+  productId    Int?
+  productName  String
+  bagQty       Int
+  notes        String?
+  createdAt    DateTime          @default(now())
+  confeccion   ProcessConfeccion @relation(fields: [confeccionId], references: [id], onDelete: Cascade)
 }
 
 model FinalControl {
@@ -505,6 +544,7 @@ model FinalInspection {
   materialWidthOk     Boolean         @default(false)
   observations        String?
   productNameObserved String?
+  signatureName       String?
   signedOff           Boolean         @default(false)
   order               ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   inspectorUser       User?           @relation("FinalInspectionInspector", fields: [inspectorUserId], references: [id])

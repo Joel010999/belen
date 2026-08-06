@@ -89,7 +89,20 @@ const createInitialMaterialLot = () => ({
 
 const createInitialOutputBobbin = (index = 1) => ({
   label: `Bobina ${index}`,
+  productName: '',
   kg: '',
+  notes: ''
+});
+
+const createInitialScrapEntry = (index = 1) => ({
+  kg: '',
+  description: `Scrap ${index}`
+});
+
+const createInitialConfeccionOutput = () => ({
+  productId: '',
+  productName: '',
+  bagQty: '',
   notes: ''
 });
 
@@ -116,6 +129,8 @@ export const ProductionProcess: React.FC = () => {
   const [stageData, setStageData] = useState(createInitialStageData());
   const [materialLots, setMaterialLots] = useState([createInitialMaterialLot()]);
   const [refiladoOutputBobbins, setRefiladoOutputBobbins] = useState([createInitialOutputBobbin()]);
+  const [refiladoScrapEntries, setRefiladoScrapEntries] = useState([createInitialScrapEntry()]);
+  const [confeccionOutputs, setConfeccionOutputs] = useState([createInitialConfeccionOutput()]);
   const [timeLogData, setTimeLogData] = useState({
     operatorId: '',
     date: new Date().toISOString().split('T')[0],
@@ -186,6 +201,8 @@ export const ProductionProcess: React.FC = () => {
     setProcessSuccess(null);
     setMaterialLots([createInitialMaterialLot()]);
     setRefiladoOutputBobbins([createInitialOutputBobbin()]);
+    setRefiladoScrapEntries([createInitialScrapEntry()]);
+    setConfeccionOutputs([createInitialConfeccionOutput()]);
     setTimeLogData({
       operatorId: '',
       date: new Date().toISOString().split('T')[0],
@@ -198,6 +215,20 @@ export const ProductionProcess: React.FC = () => {
   const StageIcon = useMemo(() => STAGES.find((stage) => stage.key === activeStage)?.icon || Layers, [activeStage]);
   const currentMachineLocked = user?.role === 'MACHINE' && user.machine?.type?.toUpperCase() === activeStage;
   const canUseConsumptions = activeStage === 'IMPRESION' || activeStage === 'LAMINACION';
+  const canUseMaterialLots = activeStage === 'IMPRESION' || activeStage === 'LAMINACION';
+  const canUseOperationalMeters = activeStage === 'IMPRESION' || activeStage === 'LAMINACION';
+  const canUseStageScrap = activeStage === 'IMPRESION' || activeStage === 'LAMINACION';
+  const orderProductOptions = useMemo(() => {
+    if (!selectedOrder) return [];
+    const rows = selectedOrder.products?.length
+      ? selectedOrder.products.map((item: any) => item.product).filter(Boolean)
+      : [selectedOrder.product].filter(Boolean);
+    return rows.map((product: any) => ({
+      id: product.id?.toString?.() || '',
+      name: product.name || 'Producto sin nombre'
+    }));
+  }, [selectedOrder]);
+  const defaultProductName = orderProductOptions[0]?.name || selectedOrder?.product?.name || '';
   const currentStageLogs = useMemo(() => {
     const stageProcess = selectedOrder?.processes?.filter((process: any) => process.type === activeStage) || [];
     return stageProcess.flatMap((process: any) => process.timeLogs || []);
@@ -212,6 +243,9 @@ export const ProductionProcess: React.FC = () => {
     const processTypes = new Set((selectedOrder?.processes || []).map((process: any) => process.type));
     return STAGES.map((stage) => stage.key).filter((stage) => processTypes.has(stage));
   }, [selectedOrder]);
+  const plannedStageProcess = useMemo(() => (
+    selectedOrder?.processes?.find((process: any) => process.type === activeStage && process.status === 'Planificada')
+  ), [activeStage, selectedOrder]);
   const stageProcess = useMemo(() => {
     const processes = selectedOrder?.processes?.filter((process: any) => process.type === activeStage && process.status !== 'Planificada') || [];
     return processes.sort((a: any, b: any) => {
@@ -235,6 +269,86 @@ export const ProductionProcess: React.FC = () => {
     selectedOrder.status !== 'Entregadas' &&
     allPlannedStagesFinished
   );
+
+  useEffect(() => {
+    if (!selectedOrder) return;
+
+    const machineId = user?.role === 'MACHINE' && user.machine?.type?.toUpperCase() === activeStage
+      ? user.machine.id.toString()
+      : (stageProcess?.machineId || plannedStageProcess?.machineId || '')?.toString();
+
+    const nextStageData = {
+      ...createInitialStageData(),
+      machineId,
+      operatorId: stageProcess?.operatorId?.toString?.() || '',
+      processedMeters: (
+        stageProcess?.printingData?.processedMeters ??
+        stageProcess?.laminationData?.processedMeters ??
+        ''
+      ).toString(),
+      mixProportion: stageProcess?.laminationData?.mixProportion || '',
+      scrapKg: stageProcess?.scrapKg?.toString?.() || '0',
+      observations: stageProcess?.observations || '',
+      exitSense: stageProcess?.refiladoData?.exitSense || '',
+      tacaRight: stageProcess?.refiladoData?.tacaRight || '',
+      tacaLeft: stageProcess?.refiladoData?.tacaLeft || '',
+      dePie: Boolean(stageProcess?.refiladoData?.dePie),
+      deCabeza: Boolean(stageProcess?.refiladoData?.deCabeza),
+      anchoEspira: stageProcess?.refiladoData?.anchoEspira?.toString?.() || '',
+      coilDiameter: (
+        stageProcess?.printingData?.coilDiameter ??
+        stageProcess?.refiladoData?.coilDiameter ??
+        ''
+      ).toString(),
+      coilCount: (
+        stageProcess?.printingData?.coilCount ??
+        stageProcess?.refiladoData?.coilCount ??
+        ''
+      ).toString(),
+      controlName: stageProcess?.refiladoData?.controlName || '',
+      tacaDerIzq: stageProcess?.refiladoData?.tacaDerIzq || '',
+      finalAnchoEspira: stageProcess?.refiladoData?.finalAnchoEspira?.toString?.() || '',
+      finalExitSense: stageProcess?.refiladoData?.finalExitSense || '',
+      bobbinCountName: stageProcess?.refiladoData?.bobbinCountName || ''
+    };
+
+    setStageData(nextStageData);
+
+    if (activeStage === 'REFILADO') {
+      setRefiladoOutputBobbins(
+        stageProcess?.refiladoData?.outputBobbins?.length
+          ? stageProcess.refiladoData.outputBobbins.map((bobbin: any, index: number) => ({
+              label: bobbin.label || `Bobina ${index + 1}`,
+              productName: bobbin.productName || defaultProductName,
+              kg: bobbin.kg?.toString?.() || '',
+              notes: bobbin.notes || ''
+            }))
+          : [{ ...createInitialOutputBobbin(), productName: defaultProductName }]
+      );
+
+      setRefiladoScrapEntries(
+        stageProcess?.scrapEntries?.length
+          ? stageProcess.scrapEntries.map((entry: any, index: number) => ({
+              kg: entry.kg?.toString?.() || '',
+              description: entry.description || `Scrap ${index + 1}`
+            }))
+          : [createInitialScrapEntry()]
+      );
+    }
+
+    if (activeStage === 'CONFECCION') {
+      setConfeccionOutputs(
+        stageProcess?.confeccionData?.outputs?.length
+          ? stageProcess.confeccionData.outputs.map((output: any) => ({
+              productId: output.productId?.toString?.() || '',
+              productName: output.productName || defaultProductName,
+              bagQty: output.bagQty?.toString?.() || '',
+              notes: output.notes || ''
+            }))
+          : [{ ...createInitialConfeccionOutput(), productName: defaultProductName, productId: orderProductOptions[0]?.id || '' }]
+      );
+    }
+  }, [activeStage, defaultProductName, orderProductOptions, plannedStageProcess?.machineId, selectedOrder, stageProcess, user?.machine?.id, user?.machine?.type, user?.role]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const target = e.target;
@@ -274,9 +388,50 @@ export const ProductionProcess: React.FC = () => {
     ));
   };
 
+  const updateScrapEntry = (index: number, field: string, value: string) => {
+    setRefiladoScrapEntries((prev) => prev.map((entry, entryIndex) => entryIndex === index ? { ...entry, [field]: value } : entry));
+  };
+
+  const addScrapEntry = () => {
+    setRefiladoScrapEntries((prev) => [...prev, createInitialScrapEntry(prev.length + 1)]);
+  };
+
+  const removeScrapEntry = (index: number) => {
+    setRefiladoScrapEntries((prev) => (
+      prev.length === 1 ? [createInitialScrapEntry()] : prev.filter((_, entryIndex) => entryIndex !== index)
+    ));
+  };
+
+  const updateConfeccionOutput = (index: number, field: string, value: string) => {
+    setConfeccionOutputs((prev) => prev.map((output, outputIndex) => {
+      if (outputIndex !== index) return output;
+      if (field === 'productId') {
+        const product = orderProductOptions.find((item: { id: string; name: string }) => item.id === value);
+        return { ...output, productId: value, productName: product?.name || output.productName };
+      }
+      return { ...output, [field]: value };
+    }));
+  };
+
+  const addConfeccionOutput = () => {
+    setConfeccionOutputs((prev) => [...prev, createInitialConfeccionOutput()]);
+  };
+
+  const removeConfeccionOutput = (index: number) => {
+    setConfeccionOutputs((prev) => (
+      prev.length === 1 ? [createInitialConfeccionOutput()] : prev.filter((_, outputIndex) => outputIndex !== index)
+    ));
+  };
+
   const totalOutputKg = useMemo(() => (
     refiladoOutputBobbins.reduce((acc, bobbin) => acc + (parseFloat(bobbin.kg) || 0), 0)
   ), [refiladoOutputBobbins]);
+  const totalRefiladoScrapKg = useMemo(() => (
+    refiladoScrapEntries.reduce((acc, entry) => acc + (parseFloat(entry.kg) || 0), 0)
+  ), [refiladoScrapEntries]);
+  const totalConfeccionBags = useMemo(() => (
+    confeccionOutputs.reduce((acc, output) => acc + (parseInt(output.bagQty, 10) || 0), 0)
+  ), [confeccionOutputs]);
 
   const handleStageAction = async (action: 'START' | 'FINISH') => {
     if (!selectedOrderId) {
@@ -357,7 +512,7 @@ export const ProductionProcess: React.FC = () => {
         type: activeStage,
         machineId: stageData.machineId,
         operatorId: stageData.operatorId || undefined,
-        scrapKg: stageData.scrapKg,
+        scrapKg: activeStage === 'REFILADO' ? totalRefiladoScrapKg : stageData.scrapKg,
         observations: stageData.observations,
         specificData: {}
       };
@@ -373,7 +528,7 @@ export const ProductionProcess: React.FC = () => {
           observations: lot.observations || undefined
         }));
 
-      if (lotsToSave.length > 0) {
+      if (canUseMaterialLots && lotsToSave.length > 0) {
         payload.materialLots = lotsToSave;
       }
 
@@ -395,26 +550,32 @@ export const ProductionProcess: React.FC = () => {
 
       if (activeStage === 'REFILADO') {
         payload.specificData = {
-          exitSense: stageData.exitSense || undefined,
-          tacaRight: stageData.tacaRight || undefined,
-          tacaLeft: stageData.tacaLeft || undefined,
-          dePie: stageData.dePie,
-          deCabeza: stageData.deCabeza,
-          anchoEspira: stageData.anchoEspira || undefined,
-          coilDiameter: stageData.coilDiameter || undefined,
-          processedMeters: stageData.processedMeters || undefined,
-          coilCount: stageData.coilCount || undefined,
-          controlName: stageData.controlName || undefined,
-          tacaDerIzq: stageData.tacaDerIzq || undefined,
-          finalAnchoEspira: stageData.finalAnchoEspira || undefined,
-          finalExitSense: stageData.finalExitSense || undefined,
-          bobbinCountName: stageData.bobbinCountName || undefined,
+          scrapEntries: refiladoScrapEntries
+            .filter((entry) => entry.kg)
+            .map((entry, index) => ({
+              kg: entry.kg || 0,
+              description: entry.description.trim() || `Scrap ${index + 1}`
+            })),
           outputBobbins: refiladoOutputBobbins
             .filter((bobbin) => bobbin.kg)
             .map((bobbin, index) => ({
               label: bobbin.label.trim() || `Bobina ${index + 1}`,
+              productName: bobbin.productName || defaultProductName || undefined,
               kg: bobbin.kg || 0,
               notes: bobbin.notes || undefined
+            }))
+        };
+      }
+
+      if (activeStage === 'CONFECCION') {
+        payload.specificData = {
+          outputs: confeccionOutputs
+            .filter((output) => output.bagQty && (output.productName || output.productId))
+            .map((output) => ({
+              productId: output.productId || undefined,
+              productName: output.productName || defaultProductName,
+              bagQty: output.bagQty || 0,
+              notes: output.notes || undefined
             }))
         };
       }
@@ -673,16 +834,20 @@ export const ProductionProcess: React.FC = () => {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="label">Metros reales</label>
-                <input name="processedMeters" value={stageData.processedMeters} onChange={handleInputChange} type="number" className="input" placeholder="0" />
-              </div>
-              <div>
-                <label className="label">Scrap (kg)</label>
-                <input name="scrapKg" value={stageData.scrapKg} onChange={handleInputChange} type="number" className="input" />
-              </div>
+              {canUseOperationalMeters && (
+                <div>
+                  <label className="label">Metros reales</label>
+                  <input name="processedMeters" value={stageData.processedMeters} onChange={handleInputChange} type="number" className="input" placeholder="0" />
+                </div>
+              )}
+              {canUseStageScrap && (
+                <div>
+                  <label className="label">Scrap (kg)</label>
+                  <input name="scrapKg" value={stageData.scrapKg} onChange={handleInputChange} type="number" className="input" />
+                </div>
+              )}
 
-              {(activeStage === 'IMPRESION' || activeStage === 'REFILADO') && (
+              {activeStage === 'IMPRESION' && (
                 <div>
                   <label className="label">Sentido de salida</label>
                   <input name="exitSense" value={stageData.exitSense} onChange={handleInputChange} type="text" className="input" placeholder="Ej: Cliente hacia arriba" />
@@ -710,66 +875,23 @@ export const ProductionProcess: React.FC = () => {
               )}
 
               {activeStage === 'REFILADO' && (
-                <>
-                  <div>
-                    <label className="label">Taca derecha</label>
-                    <input name="tacaRight" value={stageData.tacaRight} onChange={handleInputChange} type="text" className="input" />
+                <div style={{ gridColumn: '1 / -1', border: '1px solid var(--border)', borderRadius: '14px', padding: '1rem', background: 'rgba(255,255,255,0.025)' }}>
+                  <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.85rem' }}>Datos tecnicos cargados por administracion</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.85rem' }}>
+                    <DataPill label="Sentido salida cliente" value={selectedOrder.technicalSpec?.refiladoExitSense || '-'} />
+                    <DataPill label="De pie" value={selectedOrder.technicalSpec?.refiladoDePie ? 'Si' : 'No'} />
+                    <DataPill label="De cabeza" value={selectedOrder.technicalSpec?.refiladoDeCabeza ? 'Si' : 'No'} />
+                    <DataPill label="Taca derecha" value={selectedOrder.technicalSpec?.refiladoTacaRight || '-'} />
+                    <DataPill label="Taca izquierda" value={selectedOrder.technicalSpec?.refiladoTacaLeft || '-'} />
+                    <DataPill label="Ancho espira" value={selectedOrder.technicalSpec?.refiladoAnchoEspira ?? '-'} />
+                    <DataPill label="Diametro bobinas CMM" value={selectedOrder.technicalSpec?.refiladoCoilDiameter ?? '-'} />
+                    <DataPill label="Metros" value={selectedOrder.technicalSpec?.refiladoMeters ?? '-'} />
                   </div>
-                  <div>
-                    <label className="label">Taca izquierda</label>
-                    <input name="tacaLeft" value={stageData.tacaLeft} onChange={handleInputChange} type="text" className="input" />
-                  </div>
-                  <div>
-                    <label className="label">Ancho espira</label>
-                    <input name="anchoEspira" value={stageData.anchoEspira} onChange={handleInputChange} type="number" className="input" placeholder="0" />
-                  </div>
-                  <div>
-                    <label className="label">Diametro bobinas CMM</label>
-                    <input name="coilDiameter" value={stageData.coilDiameter} onChange={handleInputChange} type="number" className="input" />
-                  </div>
-                  <div>
-                    <label className="label">Cantidad de bobinas</label>
-                    <input name="coilCount" value={stageData.coilCount} onChange={handleInputChange} type="number" className="input" />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input type="checkbox" name="deCabeza" checked={stageData.deCabeza} onChange={handleInputChange} />
-                      De cabeza
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input type="checkbox" name="dePie" checked={stageData.dePie} onChange={handleInputChange} />
-                      De pie
-                    </label>
-                  </div>
-                  <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-                    <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.75rem' }}>Control de salida refiladora</h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-                      <div>
-                        <label className="label">Nombre control</label>
-                        <input name="controlName" value={stageData.controlName} onChange={handleInputChange} type="text" className="input" />
-                      </div>
-                      <div>
-                        <label className="label">Taca der-izq</label>
-                        <input name="tacaDerIzq" value={stageData.tacaDerIzq} onChange={handleInputChange} type="text" className="input" />
-                      </div>
-                      <div>
-                        <label className="label">Ancho espira salida</label>
-                        <input name="finalAnchoEspira" value={stageData.finalAnchoEspira} onChange={handleInputChange} type="number" className="input" />
-                      </div>
-                      <div>
-                        <label className="label">Sentido de salida final</label>
-                        <input name="finalExitSense" value={stageData.finalExitSense} onChange={handleInputChange} type="text" className="input" />
-                      </div>
-                      <div>
-                        <label className="label">Nombre</label>
-                        <input name="bobbinCountName" value={stageData.bobbinCountName} onChange={handleInputChange} type="text" className="input" />
-                      </div>
-                    </div>
-                  </div>
-                </>
+                </div>
               )}
             </div>
 
+            {canUseMaterialLots && (
             <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.2rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
                 <div>
@@ -837,14 +959,62 @@ export const ProductionProcess: React.FC = () => {
                 ))}
               </div>
             </div>
+            )}
 
             {activeStage === 'REFILADO' && (
               <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.2rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
                   <div>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Scrap de refiladora</h4>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                      Agrega cada salida de scrap. Total acumulado: <strong>{totalRefiladoScrapKg.toFixed(2)} kg</strong>
+                    </p>
+                  </div>
+                  <button type="button" className="btn" onClick={addScrapEntry} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <Plus size={16} />
+                    Agregar scrap
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gap: '0.85rem', marginBottom: '1.4rem' }}>
+                  {refiladoScrapEntries.map((entry, index) => (
+                    <div key={index} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 180px) 1fr auto', gap: '0.75rem', alignItems: 'end' }}>
+                      <div>
+                        <label className="label">Scrap kg</label>
+                        <input
+                          value={entry.kg}
+                          onChange={(e) => updateScrapEntry(index, 'kg', e.target.value)}
+                          type="number"
+                          className="input"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Descripcion</label>
+                        <input
+                          value={entry.description}
+                          onChange={(e) => updateScrapEntry(index, 'description', e.target.value)}
+                          className="input"
+                          placeholder="Ej: borde, ajuste, arranque"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeScrapEntry(index)}
+                        title="Quitar scrap"
+                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0.65rem' }}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+                  <div>
                     <h4 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Bobinas de salida</h4>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
-                      Registra cuantos kilos salen por bobina en refilado. Total: <strong>{totalOutputKg.toFixed(2)} kg</strong>
+                      Registra N de orden, numero de bobina, producto y kg. Total: <strong>{totalOutputKg.toFixed(2)} kg</strong>
                     </p>
                   </div>
                   <button type="button" className="btn" onClick={addOutputBobbin} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
@@ -857,7 +1027,11 @@ export const ProductionProcess: React.FC = () => {
                   {refiladoOutputBobbins.map((bobbin, index) => (
                     <div key={index} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem', alignItems: 'end' }}>
                       <div>
-                        <label className="label">Bobina</label>
+                        <label className="label">N de orden</label>
+                        <input value={selectedOrder.orderNumber} className="input" disabled />
+                      </div>
+                      <div>
+                        <label className="label">Numero de bobina</label>
                         <input
                           value={bobbin.label}
                           onChange={(e) => updateOutputBobbin(index, 'label', e.target.value)}
@@ -866,7 +1040,16 @@ export const ProductionProcess: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="label">Kg salida</label>
+                        <label className="label">Producto</label>
+                        <input
+                          value={bobbin.productName || defaultProductName}
+                          onChange={(e) => updateOutputBobbin(index, 'productName', e.target.value)}
+                          className="input"
+                          placeholder="Producto"
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Kg</label>
                         <input
                           value={bobbin.kg}
                           onChange={(e) => updateOutputBobbin(index, 'kg', e.target.value)}
@@ -898,6 +1081,79 @@ export const ProductionProcess: React.FC = () => {
               </div>
             )}
 
+            {activeStage === 'CONFECCION' && (
+              <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+                  <div>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Produccion confeccionada</h4>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                      Carga producto y cantidad de bolsas. Total: <strong>{totalConfeccionBags.toLocaleString('es-AR')} bolsas</strong>
+                    </p>
+                  </div>
+                  <button type="button" className="btn" onClick={addConfeccionOutput} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <Plus size={16} />
+                    Agregar producto
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gap: '0.85rem' }}>
+                  {confeccionOutputs.map((output, index) => (
+                    <div key={index} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr)) auto', gap: '0.75rem', alignItems: 'end' }}>
+                      <div>
+                        <label className="label">Producto</label>
+                        {orderProductOptions.length > 0 ? (
+                          <select
+                            value={output.productId}
+                            onChange={(e) => updateConfeccionOutput(index, 'productId', e.target.value)}
+                            className="input"
+                          >
+                            <option value="">Seleccionar producto...</option>
+                            {orderProductOptions.map((product: { id: string; name: string }) => (
+                              <option key={product.id || product.name} value={product.id}>{product.name}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            value={output.productName}
+                            onChange={(e) => updateConfeccionOutput(index, 'productName', e.target.value)}
+                            className="input"
+                            placeholder="Producto"
+                          />
+                        )}
+                      </div>
+                      <div>
+                        <label className="label">Cantidad de bolsas</label>
+                        <input
+                          value={output.bagQty}
+                          onChange={(e) => updateConfeccionOutput(index, 'bagQty', e.target.value)}
+                          type="number"
+                          className="input"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Nota</label>
+                        <input
+                          value={output.notes}
+                          onChange={(e) => updateConfeccionOutput(index, 'notes', e.target.value)}
+                          className="input"
+                          placeholder="Opcional"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeConfeccionOutput(index)}
+                        title="Quitar producto"
+                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0.65rem' }}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{ marginTop: '1.2rem' }}>
               <label className="label">Observaciones operativas / paradas registradas</label>
               <textarea
@@ -914,7 +1170,9 @@ export const ProductionProcess: React.FC = () => {
               <div style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.95rem' }}>
                 <TimerReset size={16} />
                 {isStageInProcess
-                  ? 'Registra aqui datos de la etapa. Los consumos se confirman aparte y descuentan stock en el momento.'
+                  ? canUseConsumptions
+                    ? 'Registra aqui datos de la etapa. Los consumos se confirman aparte y descuentan stock en el momento.'
+                    : 'Registra aqui los datos operativos propios de esta etapa.'
                   : 'Primero marca la etapa como en proceso para poder cargar datos operativos.'}
               </div>
               <button onClick={handleSaveProcess} disabled={saving || !isStageInProcess} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.9rem 1.6rem' }}>
@@ -943,7 +1201,7 @@ export const ProductionProcess: React.FC = () => {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
               <div>
-                <label className="label">Operario del evento</label>
+                <label className="label">Operario</label>
                 <select name="operatorId" value={timeLogData.operatorId} onChange={handleTimeLogChange} className="input">
                   <option value="">Seleccionar operario...</option>
                   {operators.map((operator) => (
@@ -956,15 +1214,15 @@ export const ProductionProcess: React.FC = () => {
                 <input name="date" type="date" value={timeLogData.date} onChange={handleTimeLogChange} className="input" />
               </div>
               <div>
-                <label className="label">Hora inicio</label>
+                <label className="label">Hs de inicio</label>
                 <input name="startTime" type="time" value={timeLogData.startTime} onChange={handleTimeLogChange} className="input" />
               </div>
               <div>
-                <label className="label">Hora fin</label>
+                <label className="label">Hs de fin</label>
                 <input name="endTime" type="time" value={timeLogData.endTime} onChange={handleTimeLogChange} className="input" />
               </div>
               <div style={{ gridColumn: 'span 2' }}>
-                <label className="label">Descripcion del evento</label>
+                <label className="label">Descripcion</label>
                 <input
                   name="description"
                   value={timeLogData.description}
@@ -989,19 +1247,32 @@ export const ProductionProcess: React.FC = () => {
               {currentStageLogs.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)' }}>Todavia no hay eventos registrados en esta etapa.</p>
               ) : (
-                currentStageLogs.map((log: any) => (
-                  <div key={log.id} style={{ padding: '0.85rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                      <strong>{log.operator ? `${log.operator.firstName} ${log.operator.lastName}` : 'Sin operario'}</strong>
-                      <span style={{ color: 'var(--text-muted)' }}>
-                        {formatLogDate(log.date)} {formatLogTime(log.startTime)} - {formatLogTime(log.endTime)}
-                      </span>
-                    </div>
-                    <p style={{ marginTop: '0.35rem', color: 'var(--text-muted)' }}>
-                      {log.description || 'Sin descripcion'} - Duracion: <strong>{formatDuration(getLogDurationMinutes(log))}</strong>
-                    </p>
-                  </div>
-                ))
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', fontSize: '0.72rem' }}>
+                        <th style={{ padding: '0.65rem' }}>Operario</th>
+                        <th style={{ padding: '0.65rem' }}>Fecha</th>
+                        <th style={{ padding: '0.65rem' }}>Descripcion</th>
+                        <th style={{ padding: '0.65rem' }}>Hs de inicio</th>
+                        <th style={{ padding: '0.65rem' }}>Hs de fin</th>
+                        <th style={{ padding: '0.65rem', textAlign: 'right' }}>Duracion</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentStageLogs.map((log: any) => (
+                        <tr key={log.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <td style={{ padding: '0.65rem', fontWeight: 700 }}>{log.operator ? `${log.operator.firstName} ${log.operator.lastName}` : 'Sin operario'}</td>
+                          <td style={{ padding: '0.65rem', color: 'var(--text-muted)' }}>{formatLogDate(log.date)}</td>
+                          <td style={{ padding: '0.65rem', color: 'var(--text-muted)' }}>{log.description || 'Sin descripcion'}</td>
+                          <td style={{ padding: '0.65rem' }}>{formatLogTime(log.startTime)}</td>
+                          <td style={{ padding: '0.65rem' }}>{formatLogTime(log.endTime)}</td>
+                          <td style={{ padding: '0.65rem', textAlign: 'right', fontWeight: 800, color: 'var(--primary)' }}>{formatDuration(getLogDurationMinutes(log))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
@@ -1024,3 +1295,10 @@ export const ProductionProcess: React.FC = () => {
     </div>
   );
 };
+
+const DataPill = ({ label, value }: { label: string; value: any }) => (
+  <div style={{ padding: '0.75rem', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.55)', border: '1px solid rgba(255,255,255,0.06)' }}>
+    <p style={{ fontSize: '0.68rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.25rem' }}>{label}</p>
+    <p style={{ fontWeight: 800, overflowWrap: 'anywhere' }}>{value || '-'}</p>
+  </div>
+);

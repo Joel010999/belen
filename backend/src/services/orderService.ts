@@ -23,6 +23,19 @@ const normalizeQtyText = (val: any) => {
   return text.length > 0 ? text : null;
 };
 
+const appendUniqueText = (current: string | null | undefined, next: string | null | undefined) => {
+  const cleanNext = normalizeQtyText(next);
+  if (!cleanNext) return current || null;
+
+  const parts = String(current || '')
+    .split(' / ')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (!parts.includes(cleanNext)) parts.push(cleanNext);
+  return parts.join(' / ');
+};
+
 const normalizeRole = (role?: string) => (role || 'ADMIN').toUpperCase();
 
 const ensureAdmin = (actor?: ActorContext) => {
@@ -286,6 +299,14 @@ export const createOrder = async (orderData: any, actor?: ActorContext) => {
           tacaLeft: technicalSpec.tacaLeft,
           clisheAlignment: technicalSpec.clisheAlignment,
           techObservations: technicalSpec.techObservations,
+          refiladoExitSense: technicalSpec.refiladoExitSense,
+          refiladoDePie: Boolean(technicalSpec.refiladoDePie),
+          refiladoDeCabeza: Boolean(technicalSpec.refiladoDeCabeza),
+          refiladoTacaRight: technicalSpec.refiladoTacaRight,
+          refiladoTacaLeft: technicalSpec.refiladoTacaLeft,
+          refiladoAnchoEspira: parseSafeFloat(technicalSpec.refiladoAnchoEspira),
+          refiladoCoilDiameter: parseSafeFloat(technicalSpec.refiladoCoilDiameter),
+          refiladoMeters: parseSafeFloat(technicalSpec.refiladoMeters),
         }
       });
     }
@@ -410,7 +431,13 @@ export const getOrderById = async (id: number) => {
           printingData: true,
           laminationData: true,
           refiladoData: { include: { outputBobbins: true } },
+          confeccionData: { include: { outputs: true } },
           materialLots: true,
+          scrapEntries: {
+            orderBy: {
+              createdAt: 'asc'
+            }
+          },
           timeLogs: {
             include: {
               operator: true
@@ -459,13 +486,27 @@ export const createProcess = async (processData: any) => {
       orderBy: { id: 'desc' }
     });
 
+    const hasScrapEntriesPayload = type === 'REFILADO' && Array.isArray(specificData?.scrapEntries);
+    const scrapEntries = hasScrapEntriesPayload
+      ? specificData.scrapEntries
+          .map((entry: any) => ({
+            kg: parseSafeFloat(entry.kg) || 0,
+            description: normalizeQtyText(entry.description)
+          }))
+          .filter((entry: any) => entry.kg > 0)
+      : [];
+    const scrapKgFromEntries = scrapEntries.reduce((acc: number, entry: any) => acc + entry.kg, 0);
+
     const processPayload = {
       machineId: machineId ? parseInt(machineId) : existingInProgress?.machineId ?? null,
       operatorId: operatorId ? parseInt(operatorId) : existingInProgress?.operatorId ?? null,
       endTime: endTime ? new Date(endTime) : existingInProgress?.endTime ?? null,
-      scrapKg: scrapKg ? parseFloat(scrapKg) : existingInProgress?.scrapKg ?? 0,
+      scrapKg: hasScrapEntriesPayload ? scrapKgFromEntries : (scrapKg ? parseFloat(scrapKg) : existingInProgress?.scrapKg ?? 0),
       observations: observations ?? existingInProgress?.observations ?? null,
     };
+    const previousScrapKg = existingInProgress?.scrapKg || 0;
+    const nextScrapKg = Number(processPayload.scrapKg) || 0;
+    const scrapDeltaKg = Math.max(0, nextScrapKg - previousScrapKg);
 
     const process = existingInProgress
       ? await tx.productionProcess.update({
@@ -538,11 +579,11 @@ export const createProcess = async (processData: any) => {
     const fallbackProductId = order.productId ?? order.products?.[0]?.productId ?? null;
 
     // Discount scrap from stock only when the order is linked to a real product
-    if (scrapKg && parseFloat(scrapKg) > 0 && fallbackProductId) {
+    if (scrapDeltaKg > 0 && fallbackProductId) {
       await tx.currentStock.updateMany({
         where: { productId: fallbackProductId },
         data: {
-          stockActual: { decrement: parseFloat(scrapKg) },
+          stockActual: { decrement: scrapDeltaKg },
           lastUpdate: new Date()
         }
       });
@@ -552,7 +593,7 @@ export const createProcess = async (processData: any) => {
           type: 'EGRESO',
           itemType: 'PRODUCTO',
           productId: fallbackProductId,
-          qty: parseFloat(scrapKg),
+          qty: scrapDeltaKg,
           unit: 'KG',
           sign: -1,
           orderId: order.id,
@@ -619,6 +660,20 @@ export const createProcess = async (processData: any) => {
         }
       });
 
+      if (hasScrapEntriesPayload) {
+        await tx.processScrapEntry.deleteMany({ where: { processId: process.id } });
+
+        for (const entry of scrapEntries) {
+          await tx.processScrapEntry.create({
+            data: {
+              processId: process.id,
+              kg: entry.kg,
+              description: entry.description
+            }
+          });
+        }
+      }
+
       const outputBobbins = Array.isArray(specificData.outputBobbins) ? specificData.outputBobbins : [];
       if (outputBobbins.length > 0) {
         await tx.refiladoOutputBobbin.deleteMany({ where: { refiladoId: refilado.id } });
@@ -632,8 +687,38 @@ export const createProcess = async (processData: any) => {
           data: {
             refiladoId: refilado.id,
             label: bobbin.label,
+            productName: bobbin.productName || null,
             kg,
             notes: bobbin.notes || null
+          }
+        });
+      }
+    } else if (type === 'CONFECCION' && specificData) {
+      const confeccion = await tx.processConfeccion.upsert({
+        where: { processId: process.id },
+        update: {},
+        create: {
+          processId: process.id
+        }
+      });
+
+      const outputs = Array.isArray(specificData.outputs) ? specificData.outputs : [];
+      if (outputs.length > 0) {
+        await tx.processConfeccionOutput.deleteMany({ where: { confeccionId: confeccion.id } });
+      }
+
+      for (const output of outputs) {
+        const bagQty = parseSafeInt(output.bagQty) || 0;
+        const productName = normalizeQtyText(output.productName);
+        if (!productName || bagQty <= 0) continue;
+
+        await tx.processConfeccionOutput.create({
+          data: {
+            confeccionId: confeccion.id,
+            productId: parseSafeInt(output.productId),
+            productName,
+            bagQty,
+            notes: output.notes || null
           }
         });
       }
@@ -976,6 +1061,12 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
           printingData: true,
           laminationData: true,
           refiladoData: { include: { outputBobbins: true } },
+          confeccionData: { include: { outputs: true } },
+          scrapEntries: {
+            orderBy: {
+              createdAt: 'asc'
+            }
+          },
           timeLogs: {
             include: {
               operator: true
@@ -1015,6 +1106,15 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
     'Cantidades Insumos',
     'Costo Insumos USD',
     'Costo Insumos ARS',
+    'Lotes Insumos',
+    'Refiladora - Sentido Salida Admin',
+    'Refiladora - De Pie Admin',
+    'Refiladora - De Cabeza Admin',
+    'Refiladora - Taca Derecha Admin',
+    'Refiladora - Taca Izquierda Admin',
+    'Refiladora - Ancho Espira Admin',
+    'Refiladora - Diametro Admin',
+    'Refiladora - Metros Admin',
     'Etapa Impresión - Máquina',
     'Etapa Impresión - Operario',
     'Etapa Impresión - Metros',
@@ -1033,8 +1133,10 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
     'Etapa Refilado - Operario',
     'Etapa Refilado - Metros',
     'Etapa Refilado - Scrap (Kg)',
+    'Etapa Refilado - Scrap Detalle',
     'Etapa Refilado - Tiempos',
     'Etapa Refilado - Total Horas',
+    'Etapa Refilado - Bobinas Salida',
     'Etapa Refilado - Sentido Salida Cliente',
     'Etapa Refilado - Taca Derecha',
     'Etapa Refilado - Taca Izquierda',
@@ -1047,13 +1149,19 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
     'Etapa Refilado - Taca Der-Izq',
     'Etapa Refilado - Ancho Espira Salida',
     'Etapa Refilado - Sentido Salida Final',
-    'Etapa Refilado - Nombre'
+    'Etapa Refilado - Nombre',
+    'Etapa Confeccion - Máquina',
+    'Etapa Confeccion - Operario',
+    'Etapa Confeccion - Tiempos',
+    'Etapa Confeccion - Total Horas',
+    'Etapa Confeccion - Productos/Bolsas'
   ].join(';');
 
   const rows = orders.map(o => {
     const impresion = o.processes.find((p: any) => p.type === 'IMPRESION');
     const laminacion = o.processes.find((p: any) => p.type === 'LAMINACION');
     const refilado = o.processes.find((p: any) => p.type === 'REFILADO');
+    const confeccion = o.processes.find((p: any) => p.type === 'CONFECCION');
 
     const formatLots = (proc: any) => {
       if (!proc?.materialLots || proc.materialLots.length === 0) return '-';
@@ -1103,6 +1211,16 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
     const consumos = o.consumptions || [];
     const codigosInsumos = consumos.map((c: any) => c.supply?.code || c.supply?.name || '-').join(' / ');
     const cantidadesInsumos = consumos.map((c: any) => `${c.realQty}${c.unit}`).join(' / ');
+    const lotesInsumos = consumos.map((c: any) => c.lotNumber ? `${c.supply?.code || c.supply?.name || 'Insumo'}:${c.lotNumber}` : null).filter(Boolean).join(' / ');
+    const scrapDetalleRefilado = refilado?.scrapEntries?.length
+      ? refilado.scrapEntries.map((entry: any) => `${entry.description || 'Scrap'}:${entry.kg}kg`).join(' / ')
+      : '-';
+    const bobinasSalidaRefilado = refilado?.refiladoData?.outputBobbins?.length
+      ? refilado.refiladoData.outputBobbins.map((bobbin: any) => `${bobbin.label} ${bobbin.productName || '-'} ${bobbin.kg}kg`).join(' / ')
+      : '-';
+    const bolsasConfeccion = confeccion?.confeccionData?.outputs?.length
+      ? confeccion.confeccionData.outputs.map((output: any) => `${output.productName}:${output.bagQty} bolsas`).join(' / ')
+      : '-';
     const costoInsumosUsd = consumos.reduce((acc: number, c: any) => {
       const unitPrice = c.unitPrice ?? c.supply?.price;
       const subtotal = c.calculatedCost ?? (unitPrice ? (c.realQty || 0) * unitPrice : 0);
@@ -1140,6 +1258,15 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
       cantidadesInsumos || '-',
       costoInsumosUsd || '-',
       costoInsumosArs || '-',
+      lotesInsumos || '-',
+      o.technicalSpec?.refiladoExitSense || '-',
+      o.technicalSpec ? (o.technicalSpec.refiladoDePie ? 'Si' : 'No') : '-',
+      o.technicalSpec ? (o.technicalSpec.refiladoDeCabeza ? 'Si' : 'No') : '-',
+      o.technicalSpec?.refiladoTacaRight || '-',
+      o.technicalSpec?.refiladoTacaLeft || '-',
+      o.technicalSpec?.refiladoAnchoEspira ?? '-',
+      o.technicalSpec?.refiladoCoilDiameter ?? '-',
+      o.technicalSpec?.refiladoMeters ?? '-',
       impresion?.machine?.name || '-',
       impresion?.operator ? `${impresion.operator.firstName} ${impresion.operator.lastName}` : '-',
       impresion?.printingData?.processedMeters || '-',
@@ -1158,8 +1285,10 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
       refilado?.operator ? `${refilado.operator.firstName} ${refilado.operator.lastName}` : '-',
       refilado?.refiladoData?.processedMeters || '-',
       refilado?.scrapKg ?? '-',
+      scrapDetalleRefilado,
       formatTimeLogs(refilado),
       formatTotalHours(refilado),
+      bobinasSalidaRefilado,
       refilado?.refiladoData?.exitSense || '-',
       refilado?.refiladoData?.tacaRight || '-',
       refilado?.refiladoData?.tacaLeft || '-',
@@ -1172,7 +1301,12 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
       refilado?.refiladoData?.tacaDerIzq || '-',
       refilado?.refiladoData?.finalAnchoEspira ?? '-',
       refilado?.refiladoData?.finalExitSense || '-',
-      refilado?.refiladoData?.bobbinCountName || '-'
+      refilado?.refiladoData?.bobbinCountName || '-',
+      confeccion?.machine?.name || '-',
+      confeccion?.operator ? `${confeccion.operator.firstName} ${confeccion.operator.lastName}` : '-',
+      formatTimeLogs(confeccion),
+      formatTotalHours(confeccion),
+      bolsasConfeccion
     ].map(val => `"${val}"`).join(';');
   });
 
@@ -1364,6 +1498,14 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
           tacaLeft: technicalSpec.tacaLeft,
           clisheAlignment: technicalSpec.clisheAlignment,
           techObservations: technicalSpec.techObservations,
+          refiladoExitSense: technicalSpec.refiladoExitSense,
+          refiladoDePie: Boolean(technicalSpec.refiladoDePie),
+          refiladoDeCabeza: Boolean(technicalSpec.refiladoDeCabeza),
+          refiladoTacaRight: technicalSpec.refiladoTacaRight,
+          refiladoTacaLeft: technicalSpec.refiladoTacaLeft,
+          refiladoAnchoEspira: parseSafeFloat(technicalSpec.refiladoAnchoEspira),
+          refiladoCoilDiameter: parseSafeFloat(technicalSpec.refiladoCoilDiameter),
+          refiladoMeters: parseSafeFloat(technicalSpec.refiladoMeters),
         },
         create: {
           orderId: id,
@@ -1381,6 +1523,14 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
           tacaLeft: technicalSpec.tacaLeft,
           clisheAlignment: technicalSpec.clisheAlignment,
           techObservations: technicalSpec.techObservations,
+          refiladoExitSense: technicalSpec.refiladoExitSense,
+          refiladoDePie: Boolean(technicalSpec.refiladoDePie),
+          refiladoDeCabeza: Boolean(technicalSpec.refiladoDeCabeza),
+          refiladoTacaRight: technicalSpec.refiladoTacaRight,
+          refiladoTacaLeft: technicalSpec.refiladoTacaLeft,
+          refiladoAnchoEspira: parseSafeFloat(technicalSpec.refiladoAnchoEspira),
+          refiladoCoilDiameter: parseSafeFloat(technicalSpec.refiladoCoilDiameter),
+          refiladoMeters: parseSafeFloat(technicalSpec.refiladoMeters),
         }
       });
     }
@@ -1670,7 +1820,7 @@ export const getFinalInspections = async (orderId: number) => {
 export const saveFinalInspection = async (data: any, actor?: ActorContext) => {
   ensureAdmin(actor);
 
-  const { orderId, inspectorName, textOk, cutOk, toneOk, materialWidthOk, observations, productNameObserved, signedOff } = data;
+  const { orderId, inspectorName, textOk, cutOk, toneOk, materialWidthOk, observations, productNameObserved, signatureName, signedOff } = data;
 
   return await prisma.finalInspection.create({
     data: {
@@ -1683,6 +1833,7 @@ export const saveFinalInspection = async (data: any, actor?: ActorContext) => {
       materialWidthOk: Boolean(materialWidthOk),
       observations,
       productNameObserved,
+      signatureName,
       signedOff: Boolean(signedOff)
     },
     include: {
@@ -1738,6 +1889,7 @@ export const registerConsumptions = async (orderId: number, data: any) => {
             where: { id: existingCons.id },
             data: {
               realQty: (existingCons.realQty || 0) + realQty,
+              lotNumber: appendUniqueText(existingCons.lotNumber, cons.lotNumber),
               unitPrice: unitPrice ?? existingCons.unitPrice,
               calculatedCost: calculatedCost !== null ? (existingCons.calculatedCost || 0) + calculatedCost : existingCons.calculatedCost,
               exchangeRate: exchangeRate ?? existingCons.exchangeRate,
@@ -1750,6 +1902,7 @@ export const registerConsumptions = async (orderId: number, data: any) => {
             data: {
               orderId,
               supplyId,
+              lotNumber: cons.lotNumber || null,
               plannedQty: cons.plannedQty ? parseFloat(cons.plannedQty) : 0,
               realQty,
               unit: cons.unit || 'kg',

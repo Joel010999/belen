@@ -54,7 +54,15 @@ export const OrderForm: React.FC = () => {
       tacaRight: '',
       tacaLeft: '',
       clisheAlignment: '',
-      techObservations: ''
+      techObservations: '',
+      refiladoExitSense: '',
+      refiladoDePie: false,
+      refiladoDeCabeza: false,
+      refiladoTacaRight: '',
+      refiladoTacaLeft: '',
+      refiladoAnchoEspira: '',
+      refiladoCoilDiameter: '',
+      refiladoMeters: ''
     },
     colorOrders: [
       { sequence: 1, colorName: '', formula: '', lotNumber: '', changesToConsider: '' }
@@ -111,7 +119,15 @@ export const OrderForm: React.FC = () => {
               tacaRight: order.technicalSpec?.tacaRight || '',
               tacaLeft: order.technicalSpec?.tacaLeft || '',
               clisheAlignment: order.technicalSpec?.clisheAlignment || '',
-              techObservations: order.technicalSpec?.techObservations || ''
+              techObservations: order.technicalSpec?.techObservations || '',
+              refiladoExitSense: order.technicalSpec?.refiladoExitSense || '',
+              refiladoDePie: Boolean(order.technicalSpec?.refiladoDePie),
+              refiladoDeCabeza: Boolean(order.technicalSpec?.refiladoDeCabeza),
+              refiladoTacaRight: order.technicalSpec?.refiladoTacaRight || '',
+              refiladoTacaLeft: order.technicalSpec?.refiladoTacaLeft || '',
+              refiladoAnchoEspira: order.technicalSpec?.refiladoAnchoEspira?.toString() || '',
+              refiladoCoilDiameter: order.technicalSpec?.refiladoCoilDiameter?.toString() || '',
+              refiladoMeters: order.technicalSpec?.refiladoMeters?.toString() || ''
             },
             colorOrders: order.colorOrders?.length > 0
               ? order.colorOrders.map((c: any) => ({
@@ -485,6 +501,45 @@ export const OrderForm: React.FC = () => {
         <div>
           <label className="label">Clise Centrado Izq / Der</label>
           <input name="technicalSpec.clisheAlignment" value={formData.technicalSpec.clisheAlignment} onChange={handleInputChange} type="text" className="input" placeholder="Ej: Centrado" />
+        </div>
+        <div style={{ gridColumn: 'span 2', marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+          <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.85rem' }}>Refiladora corte</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem' }}>
+            <div>
+              <label className="label">Sentido de salida</label>
+              <input name="technicalSpec.refiladoExitSense" value={formData.technicalSpec.refiladoExitSense} onChange={handleInputChange} type="text" className="input" />
+            </div>
+            <div>
+              <label className="label">Taca derecha</label>
+              <input name="technicalSpec.refiladoTacaRight" value={formData.technicalSpec.refiladoTacaRight} onChange={handleInputChange} type="text" className="input" />
+            </div>
+            <div>
+              <label className="label">Taca izquierda</label>
+              <input name="technicalSpec.refiladoTacaLeft" value={formData.technicalSpec.refiladoTacaLeft} onChange={handleInputChange} type="text" className="input" />
+            </div>
+            <div>
+              <label className="label">Ancho de espira</label>
+              <input name="technicalSpec.refiladoAnchoEspira" value={formData.technicalSpec.refiladoAnchoEspira} onChange={handleInputChange} type="number" className="input" />
+            </div>
+            <div>
+              <label className="label">Diametro bobinas CMM</label>
+              <input name="technicalSpec.refiladoCoilDiameter" value={formData.technicalSpec.refiladoCoilDiameter} onChange={handleInputChange} type="number" className="input" />
+            </div>
+            <div>
+              <label className="label">Metros</label>
+              <input name="technicalSpec.refiladoMeters" value={formData.technicalSpec.refiladoMeters} onChange={handleInputChange} type="number" className="input" />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input type="checkbox" name="technicalSpec.refiladoDePie" checked={formData.technicalSpec.refiladoDePie} onChange={handleInputChange} />
+                De pie
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input type="checkbox" name="technicalSpec.refiladoDeCabeza" checked={formData.technicalSpec.refiladoDeCabeza} onChange={handleInputChange} />
+                De cabeza
+              </label>
+            </div>
+          </div>
         </div>
         <div style={{ gridColumn: 'span 2' }}>
           <label className="label">Observaciones Tecnicas</label>

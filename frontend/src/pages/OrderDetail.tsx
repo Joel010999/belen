@@ -25,12 +25,30 @@ const STAGES = [
   { value: 'CONFECCION', label: 'Confeccion', field: 'approvedConfeccion' }
 ];
 
-const DEFAULT_CHECKLIST_ITEMS = [
-  { time: 'Inicio', controlName: 'Revision visual', checked: false, value: '' },
-  { time: 'Proceso', controlName: 'Registro de parametros', checked: false, value: '' },
-  { time: 'Proceso', controlName: 'Validacion de material', checked: false, value: '' },
-  { time: 'Final', controlName: 'Liberacion de etapa', checked: false, value: '' }
+const CONTROL_CHECKLIST_ITEMS = [
+  { time: 'Campo', controlName: 'Nombre encargado', checked: false, value: '' },
+  { time: 'Control', controlName: 'Texto', checked: false, value: '' },
+  { time: 'Control', controlName: 'Corte', checked: false, value: '' },
+  { time: 'Control', controlName: 'Tono', checked: false, value: '' },
+  { time: 'Control', controlName: 'Ancho material', checked: false, value: '' },
+  { time: 'Campo', controlName: 'Observacion', checked: false, value: '' },
+  { time: 'Campo', controlName: 'Producto', checked: false, value: '' },
+  { time: 'Campo', controlName: 'Nombre', checked: false, value: '' }
 ];
+
+const LAMINATION_CHECKLIST_ITEMS = [
+  { time: 'Campo', controlName: 'Nombre encargado', checked: false, value: '' },
+  { time: 'Control', controlName: 'Carga 0.022', checked: false, value: '' },
+  { time: 'Campo', controlName: 'Ancho', checked: false, value: '' },
+  { time: 'Campo', controlName: 'Tipo material', checked: false, value: '' },
+  { time: 'Control', controlName: 'Sin agujas', checked: false, value: '' }
+];
+
+const CHECKLIST_BOOLEAN_FIELDS = new Set(['Texto', 'Corte', 'Tono', 'Ancho material', 'Carga 0.022', 'Sin agujas']);
+
+const getChecklistTemplate = (stage: string) => (
+  stage === 'LAMINACION' ? LAMINATION_CHECKLIST_ITEMS : CONTROL_CHECKLIST_ITEMS
+).map((item) => ({ ...item }));
 
 const getStageLabel = (stage: string) => STAGES.find((item) => item.value === stage)?.label || stage;
 
@@ -71,7 +89,7 @@ export const OrderDetail: React.FC = () => {
   const [showChecklistModal, setShowChecklistModal] = useState(false);
   const [showQualityModal, setShowQualityModal] = useState(false);
   const [checklistStage, setChecklistStage] = useState('IMPRESION');
-  const [checklistItems, setChecklistItems] = useState(DEFAULT_CHECKLIST_ITEMS);
+  const [checklistItems, setChecklistItems] = useState(getChecklistTemplate('IMPRESION'));
   const [qualityStage, setQualityStage] = useState('IMPRESION');
   const [qualityStatus, setQualityStatus] = useState('APROBADO');
   const [qualityObservations, setQualityObservations] = useState('');
@@ -86,6 +104,7 @@ export const OrderDetail: React.FC = () => {
     toneOk: false,
     materialWidthOk: false,
     observations: '',
+    signatureName: '',
     signedOff: false
   });
   const { user } = useAuth();
@@ -128,7 +147,7 @@ export const OrderDetail: React.FC = () => {
       return;
     }
 
-    setChecklistItems(DEFAULT_CHECKLIST_ITEMS.map((item) => ({ ...item })));
+    setChecklistItems(getChecklistTemplate(stage));
   };
 
   const loadQualityStage = (stage: string) => {
@@ -231,6 +250,7 @@ export const OrderDetail: React.FC = () => {
         toneOk: false,
         materialWidthOk: false,
         observations: '',
+        signatureName: '',
         signedOff: false
       });
       await refreshOrder();
@@ -243,6 +263,8 @@ export const OrderDetail: React.FC = () => {
 
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center' }}>Cargando orden...</div>;
   if (!order) return <div style={{ padding: '3rem', textAlign: 'center' }}>Orden no encontrada.</div>;
+
+  const orderUsesConsumptions = order.processes?.some((process: any) => ['IMPRESION', 'LAMINACION'].includes(process.type)) || order.colorOrders?.length > 0;
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', paddingBottom: '4rem' }}>
@@ -349,6 +371,19 @@ export const OrderDetail: React.FC = () => {
             <DataField label="Taca Derecha" value={order?.technicalSpec?.tacaRight} />
             <DataField label="Taca Izquierda" value={order?.technicalSpec?.tacaLeft} />
             <DataField label="Clise Centrado" value={order?.technicalSpec?.clisheAlignment} />
+            <div style={{ gridColumn: 'span 2', borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <p style={{ fontSize: '0.75rem', fontWeight: 900, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Refiladora corte</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.85rem' }}>
+                <DataField label="Sentido salida" value={order?.technicalSpec?.refiladoExitSense} />
+                <DataField label="De pie" value={order?.technicalSpec?.refiladoDePie ? 'Si' : 'No'} />
+                <DataField label="De cabeza" value={order?.technicalSpec?.refiladoDeCabeza ? 'Si' : 'No'} />
+                <DataField label="Taca derecha" value={order?.technicalSpec?.refiladoTacaRight} />
+                <DataField label="Taca izquierda" value={order?.technicalSpec?.refiladoTacaLeft} />
+                <DataField label="Ancho espira" value={order?.technicalSpec?.refiladoAnchoEspira} />
+                <DataField label="Diametro" value={order?.technicalSpec?.refiladoCoilDiameter} />
+                <DataField label="Metros" value={order?.technicalSpec?.refiladoMeters} />
+              </div>
+            </div>
             <div style={{ gridColumn: 'span 2', marginTop: '1rem' }}>
               <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Especificaciones / Observaciones</p>
               <p style={{ fontSize: '0.875rem', fontWeight: 500, whiteSpace: 'pre-line' }}>{order.specifications || order.observations || '-'}</p>
@@ -392,7 +427,11 @@ export const OrderDetail: React.FC = () => {
                       Producto: {inspection.productNameObserved || '-'} | Texto: {inspection.textOk ? 'OK' : 'NO'} | Corte: {inspection.cutOk ? 'OK' : 'NO'} | Tono: {inspection.toneOk ? 'OK' : 'NO'} | Ancho Mat.: {inspection.materialWidthOk ? 'OK' : 'NO'}
                     </p>
                     <p style={{ marginTop: '0.4rem' }}>{inspection.observations || 'Sin observaciones'}</p>
-                    {inspection.signedOff && <span className="status-badge" style={{ marginTop: '0.35rem' }}>Firmada</span>}
+                    {(inspection.signatureName || inspection.signedOff) && (
+                      <span className="status-badge" style={{ marginTop: '0.35rem' }}>
+                        Nombre/Firma: {inspection.signatureName || 'Firmada'}
+                      </span>
+                    )}
                   </div>
                 ))
               ) : (
@@ -403,11 +442,11 @@ export const OrderDetail: React.FC = () => {
             {user?.role === 'ADMIN' && (
               <>
                 <div>
-                  <label className="label">Nombre del inspector</label>
+                  <label className="label">Nombre encargado</label>
                   <input className="input" value={inspectionForm.inspectorName} onChange={(e) => handleInspectionFieldChange('inspectorName', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Producto observado</label>
+                  <label className="label">Producto</label>
                   <input className="input" value={inspectionForm.productNameObserved} onChange={(e) => handleInspectionFieldChange('productNameObserved', e.target.value)} />
                 </div>
                 <div style={{ gridColumn: 'span 2', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
@@ -415,7 +454,7 @@ export const OrderDetail: React.FC = () => {
                     ['textOk', 'Texto'],
                     ['cutOk', 'Corte'],
                     ['toneOk', 'Tono'],
-                    ['materialWidthOk', 'Ancho Mat.']
+                    ['materialWidthOk', 'Ancho material']
                   ].map(([field, label]) => (
                     <label key={field} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                       <input
@@ -436,13 +475,17 @@ export const OrderDetail: React.FC = () => {
                   </label>
                 </div>
                 <div style={{ gridColumn: 'span 2' }}>
-                  <label className="label">Observaciones</label>
+                  <label className="label">Observacion</label>
                   <textarea
                     className="input"
                     style={{ minHeight: '100px', resize: 'vertical' }}
                     value={inspectionForm.observations}
                     onChange={(e) => handleInspectionFieldChange('observations', e.target.value)}
                   />
+                </div>
+                <div>
+                  <label className="label">Nombre</label>
+                  <input className="input" value={inspectionForm.signatureName} onChange={(e) => handleInspectionFieldChange('signatureName', e.target.value)} />
                 </div>
                 <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end' }}>
                   <button className="btn btn-primary" onClick={saveFinalInspection} disabled={savingInspection}>
@@ -544,7 +587,19 @@ export const OrderDetail: React.FC = () => {
                       </div>
                     )}
 
-                    {p.materialLots && p.materialLots.length > 0 && (
+                    {p.scrapEntries && p.scrapEntries.length > 0 && (
+                      <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.25rem' }}>Scrap registrado:</p>
+                        {p.scrapEntries.map((entry: any) => (
+                          <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', gap: '1rem' }}>
+                            <span>{entry.description || 'Scrap'}</span>
+                            <span>{entry.kg} kg</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {p.type !== 'REFILADO' && p.type !== 'CONFECCION' && p.materialLots && p.materialLots.length > 0 && (
                       <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                         <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.25rem' }}>Lotes de Material:</p>
                         {p.materialLots.map((l: any) => (
@@ -574,9 +629,21 @@ export const OrderDetail: React.FC = () => {
                       <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                         <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.25rem' }}>Bobinas de salida:</p>
                         {p.refiladoData.outputBobbins.map((bobbin: any) => (
-                          <div key={bobbin.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
-                            <span>{bobbin.label}</span>
+                          <div key={bobbin.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', gap: '1rem' }}>
+                            <span>{bobbin.label} - {bobbin.productName || 'Sin producto'}</span>
                             <span>{bobbin.kg} kg</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {p.confeccionData?.outputs && p.confeccionData.outputs.length > 0 && (
+                      <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.25rem' }}>Confeccion:</p>
+                        {p.confeccionData.outputs.map((output: any) => (
+                          <div key={output.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', gap: '1rem' }}>
+                            <span>{output.productName}</span>
+                            <span>{Number(output.bagQty || 0).toLocaleString('es-AR')} bolsas</span>
                           </div>
                         ))}
                       </div>
@@ -589,33 +656,34 @@ export const OrderDetail: React.FC = () => {
         </div>
       </div>
 
-      <OrderConsumptions order={order} onUpdate={refreshOrder} />
+      {orderUsesConsumptions && <OrderConsumptions order={order} onUpdate={refreshOrder} />}
 
       {showChecklistModal && (
         <ModalShell title={`Checklist de ${getStageLabel(checklistStage)}`} onClose={() => setShowChecklistModal(false)}>
           <div style={{ display: 'grid', gap: '0.85rem' }}>
             {checklistItems.map((item, index) => (
-              <div key={`${item.controlName}-${index}`} className="card" style={{ padding: '1rem', backgroundColor: 'rgba(255,255,255,0.02)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem' }}>
-                  <div>
-                    <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>{item.time}</p>
-                    <p style={{ fontSize: '1rem', fontWeight: 700 }}>{item.controlName}</p>
-                  </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}>
+              <div key={`${item.controlName}-${index}`} style={{ display: 'grid', gridTemplateColumns: CHECKLIST_BOOLEAN_FIELDS.has(item.controlName) ? 'minmax(180px, 1fr) auto' : 'minmax(180px, 1fr) 2fr', gap: '0.85rem', alignItems: 'center', padding: '0.85rem 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div>
+                  <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>{item.time}</p>
+                  <p style={{ fontSize: '1rem', fontWeight: 800 }}>{item.controlName}</p>
+                </div>
+                {CHECKLIST_BOOLEAN_FIELDS.has(item.controlName) ? (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifySelf: 'end' }}>
                     <input
                       type="checkbox"
                       checked={item.checked}
                       onChange={(e) => updateChecklistItem(setChecklistItems, checklistItems, index, 'checked', e.target.checked)}
                     />
-                    De acuerdo
+                    Conforme
                   </label>
-                </div>
-                <input
-                  className="input"
-                  value={item.value}
-                  onChange={(e) => updateChecklistItem(setChecklistItems, checklistItems, index, 'value', e.target.value)}
-                  placeholder="Observaciones opcionales"
-                />
+                ) : (
+                  <input
+                    className="input"
+                    value={item.value}
+                    onChange={(e) => updateChecklistItem(setChecklistItems, checklistItems, index, 'value', e.target.value)}
+                    placeholder={item.controlName}
+                  />
+                )}
               </div>
             ))}
 
