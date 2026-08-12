@@ -18,7 +18,6 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
   const [activeTab, setActiveTab] = useState<'PRINTING' | 'LAMINATION'>(lockedTab || 'PRINTING');
   const [printingColors, setPrintingColors] = useState<any[]>([]);
   const [laminationSupplies, setLaminationSupplies] = useState<any[]>([]);
-  const [realMeters, setRealMeters] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [supplies, setSupplies] = useState<any[]>([]);
@@ -35,6 +34,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
     currentUser = null;
   }
   const canEditExchangeRate = currentUser?.role === 'ADMIN';
+  const canViewCosts = currentUser?.role === 'ADMIN';
 
   useEffect(() => {
     api.get('/supplies').then(res => setSupplies(res.data)).catch(console.error);
@@ -194,7 +194,6 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
 
     return {
       type: activeTab,
-      realMeters: realMeters ? parseFloat(realMeters) : undefined,
       exchangeRate: parseNumber(exchangeRate) || undefined,
       consumptions: activeTab === 'PRINTING' 
         ? printingColors.filter(shouldSendRow).map(c => ({
@@ -222,7 +221,6 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
   useImperativeHandle(ref, () => ({
     getConsumptionsData,
     clear: () => {
-      setRealMeters('');
       setPrintingColors(prev => prev.map(p => ({ ...p, loads: '', endValue: '', realQty: 0 })));
       setLaminationSupplies(prev => prev.map(p => ({ ...p, loads: '', endValue: '', realQty: 0 })));
     }
@@ -233,7 +231,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
     setSuccess(false);
     
     const dataToSend = getConsumptionsData();
-    if (dataToSend.consumptions.length === 0 && !dataToSend.realMeters) {
+    if (dataToSend.consumptions.length === 0) {
       alert('No hay consumos validos para guardar. Selecciona un insumo antes de confirmar.');
       setLoading(false);
       return;
@@ -297,39 +295,39 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) 1fr auto', gap: '1rem', alignItems: 'end', marginBottom: '1.5rem', backgroundColor: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '14px', padding: '1rem' }}>
-        <div>
-          <label className="label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <DollarSign size={16} /> Dolar usado para calculo
-          </label>
-          <input
-            type="number"
-            value={exchangeRate}
-            onChange={(e) => setExchangeRate(e.target.value)}
-            disabled={!canEditExchangeRate}
-            className="input-field"
-            placeholder="Cotizacion USD"
-            style={{ width: '100%', fontSize: '1rem', fontWeight: 800 }}
-          />
+      {canViewCosts && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) 1fr auto', gap: '1rem', alignItems: 'end', marginBottom: '1.5rem', backgroundColor: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '14px', padding: '1rem' }}>
+          <div>
+            <label className="label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <DollarSign size={16} /> Dolar usado para calculo
+            </label>
+            <input
+              type="number"
+              value={exchangeRate}
+              onChange={(e) => setExchangeRate(e.target.value)}
+              disabled={!canEditExchangeRate}
+              className="input-field"
+              placeholder="Cotizacion USD"
+              style={{ width: '100%', fontSize: '1rem', fontWeight: 800 }}
+            />
+          </div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.5 }}>
+            <strong style={{ color: 'var(--text-main)' }}>Fuente:</strong> {exchangeRateSource || 'Sin consultar'}
+            {exchangeRateDate ? ` | Fecha BCRA: ${new Date(`${exchangeRateDate}T00:00:00`).toLocaleDateString()}` : ''}
+            <br />
+            Administracion puede corregir la cotizacion antes de guardar si hace falta.
+          </div>
+          <button
+            type="button"
+            onClick={fetchExchangeRate}
+            disabled={exchangeRateLoading}
+            className="btn"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}
+          >
+            <RefreshCw size={16} /> {exchangeRateLoading ? 'Actualizando...' : 'Actualizar BCRA'}
+          </button>
         </div>
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.5 }}>
-          <strong style={{ color: 'var(--text-main)' }}>Fuente:</strong> {exchangeRateSource || 'Sin consultar'}
-          {exchangeRateDate ? ` | Fecha BCRA: ${new Date(`${exchangeRateDate}T00:00:00`).toLocaleDateString()}` : ''}
-          <br />
-          {canEditExchangeRate
-            ? 'Administracion puede corregir la cotizacion antes de guardar si hace falta.'
-            : 'Los usuarios de maquina usan la cotizacion automatica, sin modificar valores contables.'}
-        </div>
-        <button
-          type="button"
-          onClick={fetchExchangeRate}
-          disabled={exchangeRateLoading}
-          className="btn"
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}
-        >
-          <RefreshCw size={16} /> {exchangeRateLoading ? 'Actualizando...' : 'Actualizar BCRA'}
-        </button>
-      </div>
+      )}
 
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1.5rem' }}>
@@ -341,9 +339,9 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
               <th style={{ padding: '0.75rem' }}>Cargas (ej. 25+20)</th>
               <th style={{ padding: '0.75rem' }}>Diferencia / Fin</th>
               <th style={{ padding: '0.75rem', textAlign: 'right' }}>Consumo Real</th>
-              <th style={{ padding: '0.75rem', textAlign: 'right' }}>Precio USD</th>
-              <th style={{ padding: '0.75rem', textAlign: 'right' }}>Total USD</th>
-              <th style={{ padding: '0.75rem', textAlign: 'right' }}>Total ARS</th>
+              {canViewCosts && <th style={{ padding: '0.75rem', textAlign: 'right' }}>Precio USD</th>}
+              {canViewCosts && <th style={{ padding: '0.75rem', textAlign: 'right' }}>Total USD</th>}
+              {canViewCosts && <th style={{ padding: '0.75rem', textAlign: 'right' }}>Total ARS</th>}
               <th style={{ padding: '0.75rem', width: '50px' }}></th>
             </tr>
           </thead>
@@ -416,15 +414,21 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
                 <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 800, color: item.realQty < 0 ? 'var(--success)' : 'var(--primary)', fontSize: '1.2rem' }}>
                   {item.realQty} <span style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>kg</span>
                 </td>
-                <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 700, color: 'var(--text-muted)' }}>
-                  {getSupplyPrice(item) ? formatCurrency(getSupplyPrice(item), 'USD') : '-'}
-                </td>
-                <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 700, color: 'var(--text-muted)' }}>
-                  {getItemCostUsd(item) ? formatCurrency(getItemCostUsd(item), 'USD') : '-'}
-                </td>
-                <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 800, color: getItemCostArs(item) < 0 ? 'var(--success)' : 'var(--primary)' }}>
-                  {getItemCostArs(item) ? formatCurrency(getItemCostArs(item), 'ARS') : '-'}
-                </td>
+                {canViewCosts && (
+                  <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 700, color: 'var(--text-muted)' }}>
+                    {getSupplyPrice(item) ? formatCurrency(getSupplyPrice(item), 'USD') : '-'}
+                  </td>
+                )}
+                {canViewCosts && (
+                  <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 700, color: 'var(--text-muted)' }}>
+                    {getItemCostUsd(item) ? formatCurrency(getItemCostUsd(item), 'USD') : '-'}
+                  </td>
+                )}
+                {canViewCosts && (
+                  <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 800, color: getItemCostArs(item) < 0 ? 'var(--success)' : 'var(--primary)' }}>
+                    {getItemCostArs(item) ? formatCurrency(getItemCostArs(item), 'ARS') : '-'}
+                  </td>
+                )}
                 <td style={{ padding: '0.75rem', textAlign: 'center' }}>
                   <button 
                     onClick={() => removeRow(idx)}
@@ -445,14 +449,18 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 700 }}>Total kg carga actual</p>
           <strong style={{ fontSize: '1.35rem', color: totalKg < 0 ? 'var(--success)' : 'var(--primary)' }}>{totalKg.toFixed(2)} kg</strong>
         </div>
-        <div style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 700 }}>Subtotal USD</p>
-          <strong style={{ fontSize: '1.35rem' }}>{formatCurrency(totalUsd, 'USD')}</strong>
-        </div>
-        <div style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 700 }}>Total en pesos</p>
-          <strong style={{ fontSize: '1.35rem', color: totalArs < 0 ? 'var(--success)' : 'var(--primary)' }}>{formatCurrency(totalArs, 'ARS')}</strong>
-        </div>
+        {canViewCosts && (
+          <div style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 700 }}>Subtotal USD</p>
+            <strong style={{ fontSize: '1.35rem' }}>{formatCurrency(totalUsd, 'USD')}</strong>
+          </div>
+        )}
+        {canViewCosts && (
+          <div style={{ padding: '1rem', borderRadius: '12px', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 700 }}>Total en pesos</p>
+            <strong style={{ fontSize: '1.35rem', color: totalArs < 0 ? 'var(--success)' : 'var(--primary)' }}>{formatCurrency(totalArs, 'ARS')}</strong>
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: '1.5rem' }}>
@@ -476,10 +484,10 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
                   <th style={{ padding: '0.6rem' }}>Codigo</th>
                   <th style={{ padding: '0.6rem' }}>Lote</th>
                   <th style={{ padding: '0.6rem', textAlign: 'right' }}>Kg</th>
-                  <th style={{ padding: '0.6rem', textAlign: 'right' }}>Precio USD</th>
-                  <th style={{ padding: '0.6rem', textAlign: 'right' }}>Subtotal USD</th>
-                  <th style={{ padding: '0.6rem', textAlign: 'right' }}>Dolar usado</th>
-                  <th style={{ padding: '0.6rem', textAlign: 'right' }}>Total ARS</th>
+                  {canViewCosts && <th style={{ padding: '0.6rem', textAlign: 'right' }}>Precio USD</th>}
+                  {canViewCosts && <th style={{ padding: '0.6rem', textAlign: 'right' }}>Subtotal USD</th>}
+                  {canViewCosts && <th style={{ padding: '0.6rem', textAlign: 'right' }}>Dolar usado</th>}
+                  {canViewCosts && <th style={{ padding: '0.6rem', textAlign: 'right' }}>Total ARS</th>}
                 </tr>
               </thead>
               <tbody>
@@ -489,10 +497,10 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
                     <td style={{ padding: '0.6rem', color: 'var(--text-muted)' }}>{consumption.supply?.code || '-'}</td>
                     <td style={{ padding: '0.6rem', color: 'var(--text-muted)' }}>{consumption.lotNumber || '-'}</td>
                     <td style={{ padding: '0.6rem', textAlign: 'right', color: consumption.realQty < 0 ? 'var(--success)' : 'var(--text-main)' }}>{Number(consumption.realQty || 0).toFixed(2)} {consumption.unit || 'kg'}</td>
-                    <td style={{ padding: '0.6rem', textAlign: 'right' }}>{consumption.unitPrice ? formatCurrency(Number(consumption.unitPrice), 'USD') : '-'}</td>
-                    <td style={{ padding: '0.6rem', textAlign: 'right' }}>{consumption.calculatedCost ? formatCurrency(Number(consumption.calculatedCost), 'USD') : '-'}</td>
-                    <td style={{ padding: '0.6rem', textAlign: 'right' }}>{consumption.exchangeRate ? formatCurrency(Number(consumption.exchangeRate), 'ARS') : '-'}</td>
-                    <td style={{ padding: '0.6rem', textAlign: 'right', fontWeight: 800, color: Number(consumption.calculatedCostArs || 0) < 0 ? 'var(--success)' : 'var(--primary)' }}>{formatSavedCostArs(consumption)}</td>
+                    {canViewCosts && <td style={{ padding: '0.6rem', textAlign: 'right' }}>{consumption.unitPrice ? formatCurrency(Number(consumption.unitPrice), 'USD') : '-'}</td>}
+                    {canViewCosts && <td style={{ padding: '0.6rem', textAlign: 'right' }}>{consumption.calculatedCost ? formatCurrency(Number(consumption.calculatedCost), 'USD') : '-'}</td>}
+                    {canViewCosts && <td style={{ padding: '0.6rem', textAlign: 'right' }}>{consumption.exchangeRate ? formatCurrency(Number(consumption.exchangeRate), 'ARS') : '-'}</td>}
+                    {canViewCosts && <td style={{ padding: '0.6rem', textAlign: 'right', fontWeight: 800, color: Number(consumption.calculatedCostArs || 0) < 0 ? 'var(--success)' : 'var(--primary)' }}>{formatSavedCostArs(consumption)}</td>}
                   </tr>
                 ))}
               </tbody>
@@ -501,20 +509,8 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1.5rem', backgroundColor: 'rgba(0,0,0,0.3)', padding: '1.2rem', borderRadius: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-muted)' }}>Metros Reales Producidos:</span>
-          <input 
-            type="number" 
-            value={realMeters} 
-            onChange={(e) => setRealMeters(e.target.value)} 
-            className="input-field" 
-            placeholder="0" 
-            style={{ width: '120px', fontSize: '1rem', fontWeight: 700 }} 
-          />
-        </div>
-
-        {standalone && (
+      {standalone && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginTop: '1.5rem', backgroundColor: 'rgba(0,0,0,0.3)', padding: '1.2rem', borderRadius: '12px' }}>
           <button 
             onClick={handleSubmit}
             disabled={loading || success}
@@ -533,8 +529,8 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Save size={20} /> Confirmar Consumos</span>
             )}
           </button>
-        )}
-      </div>
+        </div>
+      )}
       
       {success && standalone && (
         <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', borderRadius: '8px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>

@@ -65,14 +65,37 @@ const PROCESS_APPROVAL_FIELDS: Record<string, string> = {
   CONFECCION: 'approvedConfeccion'
 };
 
-const CONSUMPTION_TYPE_TO_PROCESS_TYPE: Record<string, string> = {
-  PRINTING: 'IMPRESION',
-  LAMINATION: 'LAMINACION'
-};
-
 const TRANSACTION_OPTIONS = {
   maxWait: 10000,
   timeout: 30000
+};
+
+const parseProcessMetricEntries = (entries: any[] = []) =>
+  entries
+    .map((entry: any) => ({
+      meters: parseSafeFloat(entry.meters) || 0,
+      scrapKg: parseSafeFloat(entry.scrapKg) || 0,
+      coilCount: parseSafeInt(entry.coilCount) || 0,
+      description: normalizeQtyText(entry.description)
+    }))
+    .filter((entry) => entry.meters > 0 || entry.scrapKg > 0 || entry.coilCount > 0);
+
+const getProcessMetricTotals = (entries: any[] = []) => entries.reduce(
+  (totals, entry) => ({
+    meters: totals.meters + (entry.meters || 0),
+    scrapKg: totals.scrapKg + (entry.scrapKg || 0),
+    coilCount: totals.coilCount + (entry.coilCount || 0)
+  }),
+  { meters: 0, scrapKg: 0, coilCount: 0 }
+);
+
+const getFinishedStockData = (order: any) => {
+  const fallbackProductId = order.productId ?? order.products?.[0]?.productId ?? null;
+  const fallbackPlannedQty = order.plannedQty ?? order.products?.[0]?.plannedQty ?? null;
+  const rawQty = fallbackPlannedQty === undefined || fallbackPlannedQty === null ? '' : String(fallbackPlannedQty);
+  const qty = parseSafeFloat(rawQty.replace(/[^0-9.]/g, '')) || 0;
+
+  return { productId: fallbackProductId, qty };
 };
 
 const getLatestProcessByType = (processes: any[] = [], type: string) =>
@@ -295,6 +318,8 @@ export const createOrder = async (orderData: any, actor?: ActorContext) => {
           designName: technicalSpec.designName,
           cabeza: technicalSpec.cabeza,
           printingType: technicalSpec.printingType,
+          printingExitSense: technicalSpec.printingExitSense,
+          printingCoilDiameter: parseSafeFloat(technicalSpec.printingCoilDiameter),
           tacaRight: technicalSpec.tacaRight,
           tacaLeft: technicalSpec.tacaLeft,
           clisheAlignment: technicalSpec.clisheAlignment,
@@ -433,6 +458,11 @@ export const getOrderById = async (id: number) => {
           refiladoData: { include: { outputBobbins: true } },
           confeccionData: { include: { outputs: true } },
           materialLots: true,
+          metricEntries: {
+            orderBy: {
+              createdAt: 'asc'
+            }
+          },
           scrapEntries: {
             orderBy: {
               createdAt: 'asc'
@@ -496,12 +526,19 @@ export const createProcess = async (processData: any) => {
           .filter((entry: any) => entry.kg > 0)
       : [];
     const scrapKgFromEntries = scrapEntries.reduce((acc: number, entry: any) => acc + entry.kg, 0);
+    const hasMetricEntriesPayload = ['IMPRESION', 'LAMINACION'].includes(type) && Array.isArray(specificData?.metricEntries);
+    const metricEntries = hasMetricEntriesPayload ? parseProcessMetricEntries(specificData.metricEntries) : [];
+    const metricTotals = getProcessMetricTotals(metricEntries);
 
     const processPayload = {
       machineId: machineId ? parseInt(machineId) : existingInProgress?.machineId ?? null,
       operatorId: operatorId ? parseInt(operatorId) : existingInProgress?.operatorId ?? null,
       endTime: endTime ? new Date(endTime) : existingInProgress?.endTime ?? null,
-      scrapKg: hasScrapEntriesPayload ? scrapKgFromEntries : (scrapKg ? parseFloat(scrapKg) : existingInProgress?.scrapKg ?? 0),
+      scrapKg: hasMetricEntriesPayload
+        ? metricTotals.scrapKg
+        : hasScrapEntriesPayload
+          ? scrapKgFromEntries
+          : (scrapKg ? parseFloat(scrapKg) : existingInProgress?.scrapKg ?? 0),
       observations: observations ?? existingInProgress?.observations ?? null,
     };
     const previousScrapKg = existingInProgress?.scrapKg || 0;
@@ -525,7 +562,7 @@ export const createProcess = async (processData: any) => {
             operatorId: operatorId ? parseInt(operatorId) : null,
             startTime: startTime ? new Date(startTime) : new Date(),
             endTime: endTime ? new Date(endTime) : null,
-            scrapKg: scrapKg ? parseFloat(scrapKg) : 0,
+            scrapKg: Number(processPayload.scrapKg) || 0,
             observations,
           }
         });
@@ -544,6 +581,8 @@ export const createProcess = async (processData: any) => {
         const added = parseFloat(lot.addedMeters) || 0;
         const final = parseFloat(lot.finalMeters) || 0;
         const totalUsed = initial + added - final;
+
+        if (totalUsed <= 0 && !(lot.lotNumber || '').trim()) continue;
 
         await tx.materialLot.create({
           data: {
@@ -567,10 +606,26 @@ export const createProcess = async (processData: any) => {
             itemType: 'MATERIAL',
             productId: order.productId,
             qty: totalUsed > 0 ? totalUsed : 0,
-            unit: 'Metros',
+            unit: 'KG',
             sign: -1,
             orderId: order.id,
-            observations: `Consumo real lote ${lot.lotNumber} en etapa ${type}`
+            observations: `Consumo real en kg del lote ${lot.lotNumber} en etapa ${type}`
+          }
+        });
+      }
+    }
+
+    if (hasMetricEntriesPayload) {
+      await tx.processMetricEntry.deleteMany({ where: { processId: process.id } });
+
+      for (const entry of metricEntries) {
+        await tx.processMetricEntry.create({
+          data: {
+            processId: process.id,
+            meters: entry.meters,
+            scrapKg: entry.scrapKg,
+            coilCount: entry.coilCount,
+            description: entry.description
           }
         });
       }
@@ -603,33 +658,36 @@ export const createProcess = async (processData: any) => {
     }
 
     if (type === 'IMPRESION' && specificData) {
+      const processedMeters = hasMetricEntriesPayload ? metricTotals.meters : parseSafeFloat(specificData.processedMeters);
+      const coilCount = hasMetricEntriesPayload ? metricTotals.coilCount : parseSafeInt(specificData.coilCount);
       await tx.processPrinting.upsert({
         where: { processId: process.id },
         update: {
           exitSense: specificData.exitSense,
           coilDiameter: specificData.coilDiameter ? parseFloat(specificData.coilDiameter) : null,
-          processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
-          coilCount: specificData.coilCount ? parseInt(specificData.coilCount) : null,
+          processedMeters: processedMeters || null,
+          coilCount: coilCount || null,
         },
         create: {
           processId: process.id,
           exitSense: specificData.exitSense,
           coilDiameter: specificData.coilDiameter ? parseFloat(specificData.coilDiameter) : null,
-          processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
-          coilCount: specificData.coilCount ? parseInt(specificData.coilCount) : null,
+          processedMeters: processedMeters || null,
+          coilCount: coilCount || null,
         }
       });
     } else if (type === 'LAMINACION' && specificData) {
+      const processedMeters = hasMetricEntriesPayload ? metricTotals.meters : parseSafeFloat(specificData.processedMeters);
       await tx.processLamination.upsert({
         where: { processId: process.id },
         update: {
           mixProportion: specificData.mixProportion,
-          processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
+          processedMeters: processedMeters || null,
         },
         create: {
           processId: process.id,
           mixProportion: specificData.mixProportion,
-          processedMeters: specificData.processedMeters ? parseFloat(specificData.processedMeters) : null,
+          processedMeters: processedMeters || null,
         }
       });
     } else if (type === 'REFILADO' && specificData) {
@@ -976,11 +1034,7 @@ export const finalizeOrder = async (id: number, actor?: ActorContext) => {
       data: { status: 'Finalizadas', closedAt: new Date() }
     });
 
-    const fallbackProductId = order.productId ?? order.products?.[0]?.productId ?? null;
-    const fallbackPlannedQty = order.plannedQty ?? order.products?.[0]?.plannedQty ?? null;
-
-    // Calculate total produced (could be plannedQty or based on last stage)
-    const qtyProduced = parseSafeFloat(fallbackPlannedQty?.replace(/[^0-9.]/g, '')) || 0;
+    const { productId: fallbackProductId, qty: qtyProduced } = getFinishedStockData(order);
 
     if (fallbackProductId && qtyProduced > 0) {
       // Increase product stock
@@ -1015,6 +1069,76 @@ export const finalizeOrder = async (id: number, actor?: ActorContext) => {
     }
 
     return updatedOrder;
+  }, TRANSACTION_OPTIONS);
+};
+
+export const reopenFinishedOrder = async (id: number, actor?: ActorContext) => {
+  ensureProductionActor(actor);
+
+  return await prisma.$transaction(async (tx) => {
+    const order = await tx.productionOrder.findUnique({
+      where: { id },
+      include: { products: true }
+    });
+
+    if (!order) throw new Error('Orden no encontrada');
+    if (order.status === 'Entregadas') throw new Error('La orden ya fue entregada');
+    if (order.status !== 'Finalizadas') return order;
+
+    const { productId, qty } = getFinishedStockData(order);
+
+    const finishMovement = productId && qty > 0
+      ? await tx.stockMovement.findFirst({
+          where: {
+            orderId: order.id,
+            itemType: 'PRODUCTO',
+            productId,
+            type: 'INGRESO',
+            sign: 1
+          },
+          orderBy: { date: 'desc' }
+        })
+      : null;
+
+    if (productId && qty > 0 && finishMovement) {
+      await tx.currentStock.upsert({
+        where: { productId },
+        update: {
+          stockActual: { decrement: qty },
+          lastUpdate: new Date(),
+          updateSource: `Reapertura orden ${order.orderNumber}`
+        },
+        create: {
+          productId,
+          stockActual: -qty,
+          itemType: 'PRODUCTO',
+          unit: order.unit,
+          lastUpdate: new Date(),
+          updateSource: `Reapertura orden ${order.orderNumber}`
+        }
+      });
+
+      await tx.stockMovement.create({
+        data: {
+          type: 'AJUSTE',
+          itemType: 'PRODUCTO',
+          productId,
+          qty,
+          unit: order.unit,
+          sign: -1,
+          orderId: order.id,
+          observations: `Reversion de producto terminado por reapertura de orden ${order.orderNumber}`
+        }
+      });
+    }
+
+    return await tx.productionOrder.update({
+      where: { id },
+      data: {
+        status: 'En proceso',
+        closedAt: null
+      }
+    });
   }, TRANSACTION_OPTIONS);
 };
 
@@ -1058,6 +1182,11 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
           machine: true,
           operator: true,
           materialLots: true,
+          metricEntries: {
+            orderBy: {
+              createdAt: 'asc'
+            }
+          },
           printingData: true,
           laminationData: true,
           refiladoData: { include: { outputBobbins: true } },
@@ -1091,7 +1220,7 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
     'Cliente Nombre',
     'Producto Cod.',
     'Producto Nombre',
-    'Producto Cant. Usada (Metros)',
+    'Producto Cant. Usada (Kg)',
     'Cant. Planificada',
     'Unidad',
     'Medida Material',
@@ -1102,6 +1231,8 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
     'Pie',
     'Cant. Colores',
     'Tipo Impresión',
+    'Impresion - Sentido Salida Admin',
+    'Impresion - Diametro Bobina Admin',
     'Códigos Insumos',
     'Cantidades Insumos',
     'Costo Insumos USD',
@@ -1165,8 +1296,25 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
 
     const formatLots = (proc: any) => {
       if (!proc?.materialLots || proc.materialLots.length === 0) return '-';
-      return proc.materialLots.map((l: any) => `Lote:${l.lotNumber} ${l.totalUsedMeters}m`).join(', ');
+      return proc.materialLots.map((l: any) => `Lote:${l.lotNumber} ${l.totalUsedMeters}kg`).join(', ');
     };
+
+    const formatMetricEntries = (proc: any) => {
+      if (!proc?.metricEntries || proc.metricEntries.length === 0) return '-';
+      return proc.metricEntries.map((entry: any) => {
+        const parts = [
+          entry.meters ? `${entry.meters}m` : null,
+          entry.scrapKg ? `${entry.scrapKg}kg scrap` : null,
+          entry.coilCount ? `${entry.coilCount} bob.` : null,
+          entry.description || null
+        ].filter(Boolean);
+        return parts.join(' / ');
+      }).join(' | ');
+    };
+
+    const formatStageLotsAndMetrics = (proc: any) => (
+      [formatLots(proc), formatMetricEntries(proc)].filter((value) => value !== '-').join(' | ') || '-'
+    );
 
     const padTime = (value: number) => String(value).padStart(2, '0');
     const formatLogDate = (value: any) => {
@@ -1254,6 +1402,8 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
       o.technicalSpec?.pie || '',
       o.technicalSpec?.colorCount || '',
       o.technicalSpec?.printingType || '',
+      o.technicalSpec?.printingExitSense || '-',
+      o.technicalSpec?.printingCoilDiameter ?? '-',
       codigosInsumos || '-',
       cantidadesInsumos || '-',
       costoInsumosUsd || '-',
@@ -1271,14 +1421,14 @@ export const exportOrdersCSV = async (machineId?: number, month?: string) => {
       impresion?.operator ? `${impresion.operator.firstName} ${impresion.operator.lastName}` : '-',
       impresion?.printingData?.processedMeters || '-',
       impresion?.scrapKg ?? '-',
-      formatLots(impresion),
+      formatStageLotsAndMetrics(impresion),
       formatTimeLogs(impresion),
       formatTotalHours(impresion),
       laminacion?.machine?.name || '-',
       laminacion?.operator ? `${laminacion.operator.firstName} ${laminacion.operator.lastName}` : '-',
       laminacion?.laminationData?.processedMeters || '-',
       laminacion?.scrapKg ?? '-',
-      formatLots(laminacion),
+      formatStageLotsAndMetrics(laminacion),
       formatTimeLogs(laminacion),
       formatTotalHours(laminacion),
       refilado?.machine?.name || '-',
@@ -1494,6 +1644,8 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
           designName: technicalSpec.designName,
           cabeza: technicalSpec.cabeza,
           printingType: technicalSpec.printingType,
+          printingExitSense: technicalSpec.printingExitSense,
+          printingCoilDiameter: parseSafeFloat(technicalSpec.printingCoilDiameter),
           tacaRight: technicalSpec.tacaRight,
           tacaLeft: technicalSpec.tacaLeft,
           clisheAlignment: technicalSpec.clisheAlignment,
@@ -1820,7 +1972,21 @@ export const getFinalInspections = async (orderId: number) => {
 export const saveFinalInspection = async (data: any, actor?: ActorContext) => {
   ensureAdmin(actor);
 
-  const { orderId, inspectorName, textOk, cutOk, toneOk, materialWidthOk, observations, productNameObserved, signatureName, signedOff } = data;
+  const {
+    orderId,
+    inspectorName,
+    textOk,
+    cutOk,
+    toneOk,
+    materialWidthOk,
+    orderNumberOk,
+    labelOk,
+    receiptOk,
+    observations,
+    productNameObserved,
+    signatureName,
+    signedOff
+  } = data;
 
   return await prisma.finalInspection.create({
     data: {
@@ -1831,6 +1997,9 @@ export const saveFinalInspection = async (data: any, actor?: ActorContext) => {
       cutOk: Boolean(cutOk),
       toneOk: Boolean(toneOk),
       materialWidthOk: Boolean(materialWidthOk),
+      orderNumberOk: Boolean(orderNumberOk),
+      labelOk: Boolean(labelOk),
+      receiptOk: Boolean(receiptOk),
       observations,
       productNameObserved,
       signatureName,
@@ -1843,7 +2012,7 @@ export const saveFinalInspection = async (data: any, actor?: ActorContext) => {
 };
 
 export const registerConsumptions = async (orderId: number, data: any) => {
-  const { type, realMeters } = data;
+  const { type } = data;
   const consumptions = Array.isArray(data?.consumptions) ? data.consumptions : [];
   const postedExchangeRate = parseExchangeRate(data?.exchangeRate);
   const exchangeRateResult = postedExchangeRate
@@ -1953,37 +2122,6 @@ export const registerConsumptions = async (orderId: number, data: any) => {
           });
         }
       }
-    }
-
-    // 2. Optionally update real meters on the latest process of that stage
-    if (realMeters) {
-        const processType = CONSUMPTION_TYPE_TO_PROCESS_TYPE[type];
-        const process = processType
-          ? await tx.productionProcess.findFirst({
-              where: { orderId, type: processType },
-              orderBy: { id: 'desc' }
-            })
-          : null;
-        
-        if (process) {
-            if (type === 'PRINTING') {
-                const printData = await tx.processPrinting.findUnique({ where: { processId: process.id } });
-                if (printData) {
-                    await tx.processPrinting.update({
-                        where: { processId: process.id },
-                        data: { processedMeters: parseFloat(realMeters) }
-                    });
-                }
-            } else if (type === 'LAMINATION') {
-                const lamData = await tx.processLamination.findUnique({ where: { processId: process.id } });
-                if (lamData) {
-                    await tx.processLamination.update({
-                        where: { processId: process.id },
-                        data: { processedMeters: parseFloat(realMeters) }
-                    });
-                }
-            }
-        }
     }
 
     return { success: true, message: 'Consumos registrados y stock actualizado' };

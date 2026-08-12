@@ -99,6 +99,13 @@ const createInitialScrapEntry = (index = 1) => ({
   description: `Scrap ${index}`
 });
 
+const createInitialMetricEntry = (index = 1) => ({
+  meters: '',
+  scrapKg: '',
+  coilCount: '',
+  description: `Tramo ${index}`
+});
+
 const createInitialConfeccionOutput = () => ({
   productId: '',
   productName: '',
@@ -128,9 +135,11 @@ export const ProductionProcess: React.FC = () => {
   const [processSuccess, setProcessSuccess] = useState<string | null>(null);
   const [stageData, setStageData] = useState(createInitialStageData());
   const [materialLots, setMaterialLots] = useState([createInitialMaterialLot()]);
+  const [metricEntries, setMetricEntries] = useState([createInitialMetricEntry()]);
   const [refiladoOutputBobbins, setRefiladoOutputBobbins] = useState([createInitialOutputBobbin()]);
   const [refiladoScrapEntries, setRefiladoScrapEntries] = useState([createInitialScrapEntry()]);
   const [confeccionOutputs, setConfeccionOutputs] = useState([createInitialConfeccionOutput()]);
+  const [stageActionInFlight, setStageActionInFlight] = useState<'START' | 'FINISH' | 'FINISH_PRODUCT' | 'REOPEN' | null>(null);
   const [timeLogData, setTimeLogData] = useState({
     operatorId: '',
     date: new Date().toISOString().split('T')[0],
@@ -151,7 +160,7 @@ export const ProductionProcess: React.FC = () => {
 
   const fetchOrders = async () => {
     const ordersRes = await api.get('/orders');
-    setOrders(ordersRes.data.filter((order: any) => order.status !== 'Finalizadas' && order.status !== 'Entregadas'));
+    setOrders(ordersRes.data.filter((order: any) => order.status !== 'Entregadas'));
   };
 
   const fetchSelectedOrder = async (orderId: string) => {
@@ -200,6 +209,7 @@ export const ProductionProcess: React.FC = () => {
     }));
     setProcessSuccess(null);
     setMaterialLots([createInitialMaterialLot()]);
+    setMetricEntries([createInitialMetricEntry()]);
     setRefiladoOutputBobbins([createInitialOutputBobbin()]);
     setRefiladoScrapEntries([createInitialScrapEntry()]);
     setConfeccionOutputs([createInitialConfeccionOutput()]);
@@ -217,7 +227,6 @@ export const ProductionProcess: React.FC = () => {
   const canUseConsumptions = activeStage === 'IMPRESION' || activeStage === 'LAMINACION';
   const canUseMaterialLots = activeStage === 'IMPRESION' || activeStage === 'LAMINACION';
   const canUseOperationalMeters = activeStage === 'IMPRESION' || activeStage === 'LAMINACION';
-  const canUseStageScrap = activeStage === 'IMPRESION' || activeStage === 'LAMINACION';
   const orderProductOptions = useMemo(() => {
     if (!selectedOrder) return [];
     const rows = selectedOrder.products?.length
@@ -289,7 +298,9 @@ export const ProductionProcess: React.FC = () => {
       mixProportion: stageProcess?.laminationData?.mixProportion || '',
       scrapKg: stageProcess?.scrapKg?.toString?.() || '0',
       observations: stageProcess?.observations || '',
-      exitSense: stageProcess?.refiladoData?.exitSense || '',
+      exitSense: activeStage === 'IMPRESION'
+        ? (stageProcess?.printingData?.exitSense || selectedOrder.technicalSpec?.printingExitSense || '')
+        : (stageProcess?.refiladoData?.exitSense || selectedOrder.technicalSpec?.refiladoExitSense || ''),
       tacaRight: stageProcess?.refiladoData?.tacaRight || '',
       tacaLeft: stageProcess?.refiladoData?.tacaLeft || '',
       dePie: Boolean(stageProcess?.refiladoData?.dePie),
@@ -298,6 +309,7 @@ export const ProductionProcess: React.FC = () => {
       coilDiameter: (
         stageProcess?.printingData?.coilDiameter ??
         stageProcess?.refiladoData?.coilDiameter ??
+        (activeStage === 'IMPRESION' ? selectedOrder.technicalSpec?.printingCoilDiameter : undefined) ??
         ''
       ).toString(),
       coilCount: (
@@ -313,6 +325,19 @@ export const ProductionProcess: React.FC = () => {
     };
 
     setStageData(nextStageData);
+
+    if (activeStage === 'IMPRESION' || activeStage === 'LAMINACION') {
+      setMetricEntries(
+        stageProcess?.metricEntries?.length
+          ? stageProcess.metricEntries.map((entry: any, index: number) => ({
+              meters: entry.meters?.toString?.() || '',
+              scrapKg: entry.scrapKg?.toString?.() || '',
+              coilCount: entry.coilCount?.toString?.() || '',
+              description: entry.description || `Tramo ${index + 1}`
+            }))
+          : [createInitialMetricEntry()]
+      );
+    }
 
     if (activeStage === 'REFILADO') {
       setRefiladoOutputBobbins(
@@ -374,6 +399,20 @@ export const ProductionProcess: React.FC = () => {
     setMaterialLots((prev) => prev.length === 1 ? [createInitialMaterialLot()] : prev.filter((_, lotIndex) => lotIndex !== index));
   };
 
+  const updateMetricEntry = (index: number, field: string, value: string) => {
+    setMetricEntries((prev) => prev.map((entry, entryIndex) => entryIndex === index ? { ...entry, [field]: value } : entry));
+  };
+
+  const addMetricEntry = () => {
+    setMetricEntries((prev) => [...prev, createInitialMetricEntry(prev.length + 1)]);
+  };
+
+  const removeMetricEntry = (index: number) => {
+    setMetricEntries((prev) => (
+      prev.length === 1 ? [createInitialMetricEntry()] : prev.filter((_, entryIndex) => entryIndex !== index)
+    ));
+  };
+
   const updateOutputBobbin = (index: number, field: string, value: string) => {
     setRefiladoOutputBobbins((prev) => prev.map((bobbin, bobbinIndex) => bobbinIndex === index ? { ...bobbin, [field]: value } : bobbin));
   };
@@ -426,6 +465,13 @@ export const ProductionProcess: React.FC = () => {
   const totalOutputKg = useMemo(() => (
     refiladoOutputBobbins.reduce((acc, bobbin) => acc + (parseFloat(bobbin.kg) || 0), 0)
   ), [refiladoOutputBobbins]);
+  const metricTotals = useMemo(() => (
+    metricEntries.reduce((acc, entry) => ({
+      meters: acc.meters + (parseFloat(entry.meters) || 0),
+      scrapKg: acc.scrapKg + (parseFloat(entry.scrapKg) || 0),
+      coilCount: acc.coilCount + (parseInt(entry.coilCount, 10) || 0)
+    }), { meters: 0, scrapKg: 0, coilCount: 0 })
+  ), [metricEntries]);
   const totalRefiladoScrapKg = useMemo(() => (
     refiladoScrapEntries.reduce((acc, entry) => acc + (parseFloat(entry.kg) || 0), 0)
   ), [refiladoScrapEntries]);
@@ -444,7 +490,7 @@ export const ProductionProcess: React.FC = () => {
       return;
     }
 
-    setSaving(true);
+    setStageActionInFlight(action);
     setError(null);
     setProcessSuccess(null);
 
@@ -465,7 +511,7 @@ export const ProductionProcess: React.FC = () => {
       console.error(err);
       setError(err.response?.data?.error || 'No se pudo actualizar el estado de la etapa.');
     } finally {
-      setSaving(false);
+      setStageActionInFlight(null);
     }
   };
 
@@ -474,7 +520,7 @@ export const ProductionProcess: React.FC = () => {
 
     if (!window.confirm('Marcar esta orden como producto terminado? Esto suma el producto terminado al stock.')) return;
 
-    setSaving(true);
+    setStageActionInFlight('FINISH_PRODUCT');
     setError(null);
     setProcessSuccess(null);
 
@@ -487,7 +533,29 @@ export const ProductionProcess: React.FC = () => {
       console.error(err);
       setError(err.response?.data?.error || 'No se pudo marcar producto terminado.');
     } finally {
-      setSaving(false);
+      setStageActionInFlight(null);
+    }
+  };
+
+  const handleReopenProductFinished = async () => {
+    if (!selectedOrderId) return;
+
+    if (!window.confirm('Volver esta orden a en proceso? Esto revierte el ingreso de producto terminado en stock.')) return;
+
+    setStageActionInFlight('REOPEN');
+    setError(null);
+    setProcessSuccess(null);
+
+    try {
+      await api.post(`/orders/${selectedOrderId}/reopen`);
+      await fetchSelectedOrder(selectedOrderId);
+      await fetchOrders();
+      setProcessSuccess('La orden volvio a en proceso y se revirtio el ingreso de producto terminado.');
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.error || 'No se pudo volver la orden a en proceso.');
+    } finally {
+      setStageActionInFlight(null);
     }
   };
 
@@ -512,7 +580,11 @@ export const ProductionProcess: React.FC = () => {
         type: activeStage,
         machineId: stageData.machineId,
         operatorId: stageData.operatorId || undefined,
-        scrapKg: activeStage === 'REFILADO' ? totalRefiladoScrapKg : stageData.scrapKg,
+        scrapKg: activeStage === 'REFILADO'
+          ? totalRefiladoScrapKg
+          : canUseOperationalMeters
+            ? metricTotals.scrapKg
+            : stageData.scrapKg,
         observations: stageData.observations,
         specificData: {}
       };
@@ -535,16 +607,32 @@ export const ProductionProcess: React.FC = () => {
       if (activeStage === 'IMPRESION') {
         payload.specificData = {
           exitSense: stageData.exitSense || undefined,
-          processedMeters: stageData.processedMeters || undefined,
+          processedMeters: metricTotals.meters || stageData.processedMeters || undefined,
           coilDiameter: stageData.coilDiameter || undefined,
-          coilCount: stageData.coilCount || undefined
+          coilCount: metricTotals.coilCount || stageData.coilCount || undefined,
+          metricEntries: metricEntries
+            .filter((entry) => entry.meters || entry.scrapKg || entry.coilCount)
+            .map((entry, index) => ({
+              meters: entry.meters || 0,
+              scrapKg: entry.scrapKg || 0,
+              coilCount: entry.coilCount || 0,
+              description: entry.description.trim() || `Tramo ${index + 1}`
+            }))
         };
       }
 
       if (activeStage === 'LAMINACION') {
         payload.specificData = {
           mixProportion: stageData.mixProportion || undefined,
-          processedMeters: stageData.processedMeters || undefined
+          processedMeters: metricTotals.meters || stageData.processedMeters || undefined,
+          metricEntries: metricEntries
+            .filter((entry) => entry.meters || entry.scrapKg)
+            .map((entry, index) => ({
+              meters: entry.meters || 0,
+              scrapKg: entry.scrapKg || 0,
+              coilCount: 0,
+              description: entry.description.trim() || `Tramo ${index + 1}`
+            }))
         };
       }
 
@@ -772,31 +860,44 @@ export const ProductionProcess: React.FC = () => {
                 <button
                   className="btn btn-primary"
                   onClick={() => handleStageAction('START')}
-                  disabled={saving || !isStagePlanned || isStageInProcess || isStageFinished}
+                  disabled={Boolean(stageActionInFlight) || !isStagePlanned || isStageInProcess || isStageFinished || selectedOrder.status === 'Finalizadas'}
+                  aria-pressed={isStageInProcess}
                   style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', padding: '0.85rem 1.2rem' }}
                 >
                   <Play size={18} />
-                  Poner en proceso
+                  {stageActionInFlight === 'START' ? 'Iniciando...' : 'Poner en proceso'}
                 </button>
                 <button
                   className="btn"
                   onClick={() => handleStageAction('FINISH')}
-                  disabled={saving || !isStageInProcess}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', padding: '0.85rem 1.2rem', border: '1px solid var(--success)', color: 'var(--success)' }}
+                  disabled={Boolean(stageActionInFlight) || !isStageInProcess}
+                  aria-pressed={isStageFinished}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', padding: '0.85rem 1.2rem', border: '1px solid var(--success)', color: 'var(--success)', backgroundColor: isStageFinished ? 'rgba(34, 197, 94, 0.12)' : undefined }}
                 >
                   <CheckCircle2 size={18} />
-                  Marcar etapa terminada
+                  {stageActionInFlight === 'FINISH' ? 'Terminando...' : 'Marcar etapa terminada'}
                 </button>
                 <button
                   className="btn"
                   onClick={handleMarkProductFinished}
-                  disabled={saving || !canMarkProductFinished}
+                  disabled={Boolean(stageActionInFlight) || !canMarkProductFinished}
                   title={allPlannedStagesFinished ? 'Marcar producto terminado' : 'Completa todas las etapas planificadas primero'}
                   style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', padding: '0.85rem 1.2rem', border: '1px solid #f59e0b', color: '#fbbf24', opacity: canMarkProductFinished ? 1 : 0.45 }}
                 >
                   <PackageCheck size={18} />
-                  Producto terminado
+                  {stageActionInFlight === 'FINISH_PRODUCT' ? 'Marcando...' : 'Producto terminado'}
                 </button>
+                {selectedOrder.status === 'Finalizadas' && (
+                  <button
+                    className="btn"
+                    onClick={handleReopenProductFinished}
+                    disabled={Boolean(stageActionInFlight)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', padding: '0.85rem 1.2rem', border: '1px solid var(--primary)', color: 'var(--primary)', backgroundColor: 'rgba(37, 99, 235, 0.1)' }}
+                  >
+                    <Play size={18} />
+                    {stageActionInFlight === 'REOPEN' ? 'Volviendo...' : 'Volver a en proceso'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -834,19 +935,6 @@ export const ProductionProcess: React.FC = () => {
                   ))}
                 </select>
               </div>
-              {canUseOperationalMeters && (
-                <div>
-                  <label className="label">Metros reales</label>
-                  <input name="processedMeters" value={stageData.processedMeters} onChange={handleInputChange} type="number" className="input" placeholder="0" />
-                </div>
-              )}
-              {canUseStageScrap && (
-                <div>
-                  <label className="label">Scrap (kg)</label>
-                  <input name="scrapKg" value={stageData.scrapKg} onChange={handleInputChange} type="number" className="input" />
-                </div>
-              )}
-
               {activeStage === 'IMPRESION' && (
                 <div>
                   <label className="label">Sentido de salida</label>
@@ -859,10 +947,6 @@ export const ProductionProcess: React.FC = () => {
                   <div>
                     <label className="label">Diametro bobina</label>
                     <input name="coilDiameter" value={stageData.coilDiameter} onChange={handleInputChange} type="number" className="input" />
-                  </div>
-                  <div>
-                    <label className="label">Cantidad de bobinas</label>
-                    <input name="coilCount" value={stageData.coilCount} onChange={handleInputChange} type="number" className="input" />
                   </div>
                 </>
               )}
@@ -890,6 +974,80 @@ export const ProductionProcess: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {canUseOperationalMeters && (
+              <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+                  <div>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Produccion acumulada</h4>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                      Suma cada tramo trabajado. Totales: <strong>{metricTotals.meters.toFixed(2)} m</strong> / <strong>{metricTotals.scrapKg.toFixed(2)} kg scrap</strong>
+                      {activeStage === 'IMPRESION' ? <> / <strong>{metricTotals.coilCount} bobinas</strong></> : null}
+                    </p>
+                  </div>
+                  <button type="button" className="btn" onClick={addMetricEntry} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <Plus size={16} />
+                    Agregar tramo
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gap: '0.85rem' }}>
+                  {metricEntries.map((entry, index) => (
+                    <div key={index} style={{ display: 'grid', gridTemplateColumns: activeStage === 'IMPRESION' ? 'repeat(auto-fit, minmax(140px, 1fr)) auto' : 'repeat(auto-fit, minmax(170px, 1fr)) auto', gap: '0.75rem', alignItems: 'end' }}>
+                      <div>
+                        <label className="label">Metros reales</label>
+                        <input
+                          value={entry.meters}
+                          onChange={(e) => updateMetricEntry(index, 'meters', e.target.value)}
+                          type="number"
+                          className="input"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Scrap (kg)</label>
+                        <input
+                          value={entry.scrapKg}
+                          onChange={(e) => updateMetricEntry(index, 'scrapKg', e.target.value)}
+                          type="number"
+                          className="input"
+                          placeholder="0"
+                        />
+                      </div>
+                      {activeStage === 'IMPRESION' && (
+                        <div>
+                          <label className="label">Cantidad de bobinas</label>
+                          <input
+                            value={entry.coilCount}
+                            onChange={(e) => updateMetricEntry(index, 'coilCount', e.target.value)}
+                            type="number"
+                            className="input"
+                            placeholder="0"
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <label className="label">Descripcion</label>
+                        <input
+                          value={entry.description}
+                          onChange={(e) => updateMetricEntry(index, 'description', e.target.value)}
+                          className="input"
+                          placeholder={`Tramo ${index + 1}`}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeMetricEntry(index)}
+                        title="Quitar tramo"
+                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0.65rem' }}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {canUseMaterialLots && (
             <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.2rem' }}>
@@ -929,7 +1087,7 @@ export const ProductionProcess: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="label">Metros usados</label>
+                      <label className="label">Kg usados</label>
                       <input
                         value={lot.initialMeters}
                         onChange={(e) => updateMaterialLot(index, 'initialMeters', e.target.value)}

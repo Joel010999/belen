@@ -51,6 +51,8 @@ export const OrderForm: React.FC = () => {
       cabeza: '',
       designName: '',
       printingType: 'Directa',
+      printingExitSense: '',
+      printingCoilDiameter: '',
       tacaRight: '',
       tacaLeft: '',
       clisheAlignment: '',
@@ -116,6 +118,8 @@ export const OrderForm: React.FC = () => {
               cabeza: order.technicalSpec?.cabeza || '',
               designName: order.technicalSpec?.designName || '',
               printingType: order.technicalSpec?.printingType || 'Directa',
+              printingExitSense: order.technicalSpec?.printingExitSense || '',
+              printingCoilDiameter: order.technicalSpec?.printingCoilDiameter?.toString() || '',
               tacaRight: order.technicalSpec?.tacaRight || '',
               tacaLeft: order.technicalSpec?.tacaLeft || '',
               clisheAlignment: order.technicalSpec?.clisheAlignment || '',
@@ -477,6 +481,14 @@ export const OrderForm: React.FC = () => {
             <option value="Directa">Directa</option>
             <option value="Retroverso">Retroverso</option>
           </select>
+        </div>
+        <div>
+          <label className="label">Sentido de salida impresion</label>
+          <input name="technicalSpec.printingExitSense" value={formData.technicalSpec.printingExitSense} onChange={handleInputChange} type="text" className="input" placeholder="Ej: Cliente hacia arriba" />
+        </div>
+        <div>
+          <label className="label">Diametro bobina impresion</label>
+          <input name="technicalSpec.printingCoilDiameter" value={formData.technicalSpec.printingCoilDiameter} onChange={handleInputChange} type="number" className="input" placeholder="0" />
         </div>
         <div>
           <label className="label">Cantidad de Colores</label>

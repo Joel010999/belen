@@ -117,6 +117,8 @@ model TechnicalSpec {
   designName           String?
   cabeza               String?
   printingType         String?
+  printingExitSense    String?
+  printingCoilDiameter Float?
   tacaRight            String?
   tacaLeft             String?
   clisheAlignment      String?
@@ -171,7 +173,7 @@ model SystemSetting {
 }
 
 model ProductionProcess {
-  id             Int                 @id @default(autoincrement())
+  id             Int                  @id @default(autoincrement())
   orderId        Int
   type           String
   status         String
@@ -179,24 +181,36 @@ model ProductionProcess {
   operatorId     Int?
   startTime      DateTime?
   endTime        DateTime?
-  scrapKg        Float               @default(0)
+  scrapKg        Float                @default(0)
   observations   String?
   materialLots   MaterialLot[]
+  metricEntries  ProcessMetricEntry[]
   laminationData ProcessLamination?
   printingData   ProcessPrinting?
   refiladoData   ProcessRefilado?
   confeccionData ProcessConfeccion?
   timeLogs       ProcessTimeLog[]
   scrapEntries   ProcessScrapEntry[]
-  operator       Operator?           @relation(fields: [operatorId], references: [id])
-  machine        Machine?            @relation(fields: [machineId], references: [id])
-  order          ProductionOrder     @relation(fields: [orderId], references: [id])
+  operator       Operator?            @relation(fields: [operatorId], references: [id])
+  machine        Machine?             @relation(fields: [machineId], references: [id])
+  order          ProductionOrder      @relation(fields: [orderId], references: [id])
 }
 
 model ProcessScrapEntry {
   id          Int               @id @default(autoincrement())
   processId   Int
   kg          Float
+  description String?
+  createdAt   DateTime          @default(now())
+  process     ProductionProcess @relation(fields: [processId], references: [id], onDelete: Cascade)
+}
+
+model ProcessMetricEntry {
+  id          Int               @id @default(autoincrement())
+  processId   Int
+  meters      Float             @default(0)
+  scrapKg     Float             @default(0)
+  coilCount   Int               @default(0)
   description String?
   createdAt   DateTime          @default(now())
   process     ProductionProcess @relation(fields: [processId], references: [id], onDelete: Cascade)
@@ -542,6 +556,9 @@ model FinalInspection {
   cutOk               Boolean         @default(false)
   toneOk              Boolean         @default(false)
   materialWidthOk     Boolean         @default(false)
+  orderNumberOk       Boolean         @default(false)
+  labelOk             Boolean         @default(false)
+  receiptOk           Boolean         @default(false)
   observations        String?
   productNameObserved String?
   signatureName       String?

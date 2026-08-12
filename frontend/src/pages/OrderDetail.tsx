@@ -13,10 +13,11 @@ import {
   ShieldCheck,
   CheckSquare,
   FlaskConical,
-  Truck
+  Truck,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { FormSection } from '../components/FormSection';
-import { OrderConsumptions } from '../components/OrderConsumptions';
 
 const STAGES = [
   { value: 'IMPRESION', label: 'Impresion', field: 'approvedPrinting' },
@@ -39,15 +40,55 @@ const CONTROL_CHECKLIST_ITEMS = [
 const LAMINATION_CHECKLIST_ITEMS = [
   { time: 'Campo', controlName: 'Nombre encargado', checked: false, value: '' },
   { time: 'Control', controlName: 'Carga 0.022', checked: false, value: '' },
-  { time: 'Campo', controlName: 'Ancho', checked: false, value: '' },
-  { time: 'Campo', controlName: 'Tipo material', checked: false, value: '' },
+  { time: 'Control', controlName: 'Ancho', checked: false, value: '' },
+  { time: 'Control', controlName: 'Tipo material', checked: false, value: '' },
   { time: 'Control', controlName: 'Sin agujas', checked: false, value: '' }
 ];
 
-const CHECKLIST_BOOLEAN_FIELDS = new Set(['Texto', 'Corte', 'Tono', 'Ancho material', 'Carga 0.022', 'Sin agujas']);
+const REFILADO_CHECKLIST_ITEMS = [
+  { time: 'Campo', controlName: 'Nombre control', checked: false, value: '' },
+  { time: 'Control', controlName: 'Taca der-izq', checked: false, value: '' },
+  { time: 'Control', controlName: 'Ancho espira', checked: false, value: '' },
+  { time: 'Control', controlName: 'Sentido de salida', checked: false, value: '' }
+];
+
+const CONFECCION_CHECKLIST_ITEMS = [
+  { time: 'Campo', controlName: 'Supervisor', checked: false, value: '' },
+  { time: 'Control', controlName: 'Sellado central', checked: false, value: '' },
+  { time: 'Control', controlName: 'Sellado base', checked: false, value: '' },
+  { time: 'Control', controlName: 'Imagen centrada', checked: false, value: '' },
+  { time: 'Control', controlName: 'Temp de maq', checked: false, value: '' },
+  { time: 'Control', controlName: 'Teflon en condiciones', checked: false, value: '' }
+];
+
+const CHECKLIST_BOOLEAN_FIELDS = new Set([
+  'Texto',
+  'Corte',
+  'Tono',
+  'Ancho material',
+  'Carga 0.022',
+  'Ancho',
+  'Tipo material',
+  'Sin agujas',
+  'Taca der-izq',
+  'Ancho espira',
+  'Sentido de salida',
+  'Sellado central',
+  'Sellado base',
+  'Imagen centrada',
+  'Temp de maq',
+  'Teflon en condiciones'
+]);
+
+const CHECKLIST_TEMPLATES: Record<string, typeof CONTROL_CHECKLIST_ITEMS> = {
+  IMPRESION: CONTROL_CHECKLIST_ITEMS,
+  LAMINACION: LAMINATION_CHECKLIST_ITEMS,
+  REFILADO: REFILADO_CHECKLIST_ITEMS,
+  CONFECCION: CONFECCION_CHECKLIST_ITEMS
+};
 
 const getChecklistTemplate = (stage: string) => (
-  stage === 'LAMINACION' ? LAMINATION_CHECKLIST_ITEMS : CONTROL_CHECKLIST_ITEMS
+  CHECKLIST_TEMPLATES[stage] || CONTROL_CHECKLIST_ITEMS
 ).map((item) => ({ ...item }));
 
 const getStageLabel = (stage: string) => STAGES.find((item) => item.value === stage)?.label || stage;
@@ -82,6 +123,14 @@ const formatLogTime = (value: string) => new Intl.DateTimeFormat('es-AR', {
   timeZone: 'UTC'
 }).format(new Date(value));
 
+const createFinishedControlItem = () => ({
+  productNameObserved: '',
+  orderNumberOk: false,
+  labelOk: false,
+  receiptOk: false,
+  observations: ''
+});
+
 export const OrderDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [order, setOrder] = useState<any>(null);
@@ -96,16 +145,9 @@ export const OrderDetail: React.FC = () => {
   const [savingChecklist, setSavingChecklist] = useState(false);
   const [savingQuality, setSavingQuality] = useState(false);
   const [savingInspection, setSavingInspection] = useState(false);
-  const [inspectionForm, setInspectionForm] = useState({
+  const [finishedControlForm, setFinishedControlForm] = useState({
     inspectorName: '',
-    productNameObserved: '',
-    textOk: false,
-    cutOk: false,
-    toneOk: false,
-    materialWidthOk: false,
-    observations: '',
-    signatureName: '',
-    signedOff: false
+    items: [createFinishedControlItem()]
   });
   const { user } = useAuth();
 
@@ -234,24 +276,54 @@ export const OrderDetail: React.FC = () => {
     }
   };
 
-  const handleInspectionFieldChange = (field: string, value: string | boolean) => {
-    setInspectionForm((prev) => ({ ...prev, [field]: value }));
+  const handleFinishedControlFieldChange = (field: string, value: string) => {
+    setFinishedControlForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const updateFinishedControlItem = (index: number, field: string, value: string | boolean) => {
+    setFinishedControlForm((prev) => ({
+      ...prev,
+      items: prev.items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item)
+    }));
+  };
+
+  const addFinishedControlItem = () => {
+    setFinishedControlForm((prev) => ({
+      ...prev,
+      items: [...prev.items, createFinishedControlItem()]
+    }));
+  };
+
+  const removeFinishedControlItem = (index: number) => {
+    setFinishedControlForm((prev) => ({
+      ...prev,
+      items: prev.items.length === 1 ? [createFinishedControlItem()] : prev.items.filter((_, itemIndex) => itemIndex !== index)
+    }));
   };
 
   const saveFinalInspection = async () => {
     setSavingInspection(true);
     try {
-      await api.post(`/orders/${order.id}/final-inspections`, inspectionForm);
-      setInspectionForm({
+      const itemsToSave = finishedControlForm.items.filter((item) => (
+        item.productNameObserved.trim() || item.orderNumberOk || item.labelOk || item.receiptOk || item.observations.trim()
+      ));
+
+      if (!finishedControlForm.inspectorName.trim() || itemsToSave.length === 0) {
+        alert('Carga nombre de encargado y al menos un producto para controlar.');
+        return;
+      }
+
+      await Promise.all(itemsToSave.map((item) => api.post(`/orders/${order.id}/final-inspections`, {
+        inspectorName: finishedControlForm.inspectorName,
+        productNameObserved: item.productNameObserved,
+        orderNumberOk: item.orderNumberOk,
+        labelOk: item.labelOk,
+        receiptOk: item.receiptOk,
+        observations: item.observations
+      })));
+      setFinishedControlForm({
         inspectorName: '',
-        productNameObserved: '',
-        textOk: false,
-        cutOk: false,
-        toneOk: false,
-        materialWidthOk: false,
-        observations: '',
-        signatureName: '',
-        signedOff: false
+        items: [createFinishedControlItem()]
       });
       await refreshOrder();
     } catch (e: any) {
@@ -264,7 +336,10 @@ export const OrderDetail: React.FC = () => {
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center' }}>Cargando orden...</div>;
   if (!order) return <div style={{ padding: '3rem', textAlign: 'center' }}>Orden no encontrada.</div>;
 
-  const orderUsesConsumptions = order.processes?.some((process: any) => ['IMPRESION', 'LAMINACION'].includes(process.type)) || order.colorOrders?.length > 0;
+  const machineStage = user?.machine?.type ? String(user.machine.type).toUpperCase() : null;
+  const visibleStages = user?.role === 'MACHINE' && machineStage
+    ? STAGES.filter((stage) => stage.value === machineStage)
+    : STAGES;
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', paddingBottom: '4rem' }}>
@@ -366,6 +441,8 @@ export const OrderDetail: React.FC = () => {
             <DataField label="Metros Previstos" value={order?.technicalSpec?.meters ? `${order.technicalSpec.meters} m` : '-'} />
             <DataField label="Tubo" value={order?.technicalSpec?.tube} />
             <DataField label="Tipo Impresion" value={order?.technicalSpec?.printingType} />
+            <DataField label="Sentido salida impresion" value={order?.technicalSpec?.printingExitSense} />
+            <DataField label="Diametro bobina impresion" value={order?.technicalSpec?.printingCoilDiameter} />
             <DataField label="Pie" value={order?.technicalSpec?.pie} />
             <DataField label="Cabeza" value={order?.technicalSpec?.cabeza} />
             <DataField label="Taca Derecha" value={order?.technicalSpec?.tacaRight} />
@@ -401,7 +478,7 @@ export const OrderDetail: React.FC = () => {
               </p>
             </div>
             <div style={{ gridColumn: 'span 2', display: 'grid', gap: '1rem' }}>
-              {STAGES.map((stage) => (
+              {visibleStages.map((stage) => (
                 <StageCard
                   key={stage.value}
                   order={order}
@@ -414,82 +491,100 @@ export const OrderDetail: React.FC = () => {
             </div>
           </FormSection>
 
-          <FormSection title="Inspecciones Finales" icon={<ShieldCheck size={24} />}>
+          <FormSection title="Control de Producto Terminado" icon={<ShieldCheck size={24} />}>
             <div style={{ gridColumn: 'span 2' }}>
               {order.finalInspections?.length > 0 ? (
                 order.finalInspections.map((inspection: any) => (
                   <div key={inspection.id} className="card" style={{ marginBottom: '0.75rem', backgroundColor: 'rgba(255,255,255,0.02)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                      <strong>{inspection.inspectorName || inspection.inspectorUser?.name || 'Inspector sin nombre'}</strong>
+                      <strong>{inspection.inspectorName || inspection.inspectorUser?.name || 'Encargado sin nombre'}</strong>
                       <span style={{ color: 'var(--text-muted)' }}>{new Date(inspection.date).toLocaleString()}</span>
                     </div>
                     <p style={{ marginTop: '0.4rem', color: 'var(--text-muted)' }}>
-                      Producto: {inspection.productNameObserved || '-'} | Texto: {inspection.textOk ? 'OK' : 'NO'} | Corte: {inspection.cutOk ? 'OK' : 'NO'} | Tono: {inspection.toneOk ? 'OK' : 'NO'} | Ancho Mat.: {inspection.materialWidthOk ? 'OK' : 'NO'}
+                      Producto: {inspection.productNameObserved || '-'} | N de orden: {inspection.orderNumberOk ? 'OK' : 'NO'} | Etiqueta: {inspection.labelOk ? 'OK' : 'NO'} | Comprobante: {inspection.receiptOk ? 'OK' : 'NO'}
                     </p>
-                    <p style={{ marginTop: '0.4rem' }}>{inspection.observations || 'Sin observaciones'}</p>
-                    {(inspection.signatureName || inspection.signedOff) && (
-                      <span className="status-badge" style={{ marginTop: '0.35rem' }}>
-                        Nombre/Firma: {inspection.signatureName || 'Firmada'}
-                      </span>
+                    {(inspection.textOk || inspection.cutOk || inspection.toneOk || inspection.materialWidthOk || inspection.signatureName || inspection.signedOff) && (
+                      <p style={{ marginTop: '0.35rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                        Control anterior: Texto {inspection.textOk ? 'OK' : 'NO'} / Corte {inspection.cutOk ? 'OK' : 'NO'} / Tono {inspection.toneOk ? 'OK' : 'NO'} / Ancho Mat. {inspection.materialWidthOk ? 'OK' : 'NO'}
+                      </p>
                     )}
+                    <p style={{ marginTop: '0.4rem' }}>{inspection.observations || 'Sin observaciones'}</p>
                   </div>
                 ))
               ) : (
-                <p style={{ color: 'var(--text-muted)' }}>Todavia no hay inspecciones finales cargadas.</p>
+                <p style={{ color: 'var(--text-muted)' }}>Todavia no hay controles de producto terminado cargados.</p>
               )}
             </div>
 
             {user?.role === 'ADMIN' && (
               <>
-                <div>
-                  <label className="label">Nombre encargado</label>
-                  <input className="input" value={inspectionForm.inspectorName} onChange={(e) => handleInspectionFieldChange('inspectorName', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Producto</label>
-                  <input className="input" value={inspectionForm.productNameObserved} onChange={(e) => handleInspectionFieldChange('productNameObserved', e.target.value)} />
-                </div>
-                <div style={{ gridColumn: 'span 2', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                  {[
-                    ['textOk', 'Texto'],
-                    ['cutOk', 'Corte'],
-                    ['toneOk', 'Tono'],
-                    ['materialWidthOk', 'Ancho material']
-                  ].map(([field, label]) => (
-                    <label key={field} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                      <input
-                        type="checkbox"
-                        checked={(inspectionForm as any)[field]}
-                        onChange={(e) => handleInspectionFieldChange(field, e.target.checked)}
-                      />
-                      <span>{label}</span>
-                    </label>
-                  ))}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={inspectionForm.signedOff}
-                      onChange={(e) => handleInspectionFieldChange('signedOff', e.target.checked)}
-                    />
-                    <span>Firma final</span>
-                  </label>
-                </div>
                 <div style={{ gridColumn: 'span 2' }}>
-                  <label className="label">Observacion</label>
-                  <textarea
+                  <label className="label">Nombre encargado</label>
+                  <input
                     className="input"
-                    style={{ minHeight: '100px', resize: 'vertical' }}
-                    value={inspectionForm.observations}
-                    onChange={(e) => handleInspectionFieldChange('observations', e.target.value)}
+                    value={finishedControlForm.inspectorName}
+                    onChange={(e) => handleFinishedControlFieldChange('inspectorName', e.target.value)}
+                    placeholder="Encargado del control antes de salida"
                   />
                 </div>
-                <div>
-                  <label className="label">Nombre</label>
-                  <input className="input" value={inspectionForm.signatureName} onChange={(e) => handleInspectionFieldChange('signatureName', e.target.value)} />
+                <div style={{ gridColumn: 'span 2', display: 'grid', gap: '0.85rem' }}>
+                  {finishedControlForm.items.map((item, index) => (
+                    <div key={index} style={{ border: '1px solid var(--border)', borderRadius: '14px', padding: '1rem', backgroundColor: 'rgba(255,255,255,0.025)', display: 'grid', gap: '0.85rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) auto', gap: '0.85rem', alignItems: 'end' }}>
+                        <div>
+                          <label className="label">Producto</label>
+                          <input
+                            className="input"
+                            value={item.productNameObserved}
+                            onChange={(e) => updateFinishedControlItem(index, 'productNameObserved', e.target.value)}
+                            placeholder={`Producto ${index + 1}`}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFinishedControlItem(index)}
+                          title="Quitar producto"
+                          style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0.65rem' }}
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                        {[
+                          ['orderNumberOk', 'N de orden'],
+                          ['labelOk', 'Etiqueta'],
+                          ['receiptOk', 'Comprobante']
+                        ].map(([field, label]) => (
+                          <label key={field} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 700 }}>
+                            <input
+                              type="checkbox"
+                              checked={(item as any)[field]}
+                              onChange={(e) => updateFinishedControlItem(index, field, e.target.checked)}
+                            />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div>
+                        <label className="label">Observacion</label>
+                        <textarea
+                          className="input"
+                          style={{ minHeight: '80px', resize: 'vertical' }}
+                          value={item.observations}
+                          onChange={(e) => updateFinishedControlItem(index, 'observations', e.target.value)}
+                          placeholder="Observacion opcional del producto"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <button type="button" className="btn" onClick={addFinishedControlItem} style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+                    <Plus size={16} />
+                    Agregar producto
+                  </button>
                 </div>
                 <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end' }}>
                   <button className="btn btn-primary" onClick={saveFinalInspection} disabled={savingInspection}>
-                    <span>{savingInspection ? 'Guardando...' : 'Guardar Inspeccion'}</span>
+                    <span>{savingInspection ? 'Guardando...' : 'Guardar control'}</span>
                   </button>
                 </div>
               </>
@@ -605,7 +700,19 @@ export const OrderDetail: React.FC = () => {
                         {p.materialLots.map((l: any) => (
                           <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
                             <span>Lote: {l.lotNumber}</span>
-                            <span>{l.kg || 0} kg / {l.totalUsedMeters} m</span>
+                            <span>{l.kg || 0} kg / {l.totalUsedMeters} kg usados</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {p.metricEntries && p.metricEntries.length > 0 && (
+                      <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.25rem' }}>Produccion acumulada:</p>
+                        {p.metricEntries.map((entry: any) => (
+                          <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', gap: '1rem' }}>
+                            <span>{entry.description || 'Tramo'}</span>
+                            <span>{entry.meters || 0} m / {entry.scrapKg || 0} kg scrap{entry.coilCount ? ` / ${entry.coilCount} bobinas` : ''}</span>
                           </div>
                         ))}
                       </div>
@@ -655,9 +762,6 @@ export const OrderDetail: React.FC = () => {
           )}
         </div>
       </div>
-
-      {orderUsesConsumptions && <OrderConsumptions order={order} onUpdate={refreshOrder} />}
-
       {showChecklistModal && (
         <ModalShell title={`Checklist de ${getStageLabel(checklistStage)}`} onClose={() => setShowChecklistModal(false)}>
           <div style={{ display: 'grid', gap: '0.85rem' }}>

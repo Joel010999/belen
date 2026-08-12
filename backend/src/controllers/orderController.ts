@@ -93,6 +93,15 @@ export const finalizeOrder = async (req: Request, res: Response) => {
   }
 };
 
+export const reopenFinishedOrder = async (req: Request, res: Response) => {
+  try {
+    const order = await orderService.reopenFinishedOrder(parseInt(req.params.id as string), getActor(req));
+    res.json(order);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 export const deleteOrder = async (req: Request, res: Response) => {
   try {
     await orderService.deleteOrder(parseInt(req.params.id as string), getActor(req));
