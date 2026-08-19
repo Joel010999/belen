@@ -418,7 +418,7 @@ export const ProductionProcess: React.FC = () => {
   };
 
   const addOutputBobbin = () => {
-    setRefiladoOutputBobbins((prev) => [...prev, createInitialOutputBobbin(prev.length + 1)]);
+    setRefiladoOutputBobbins((prev) => [...prev, { ...createInitialOutputBobbin(prev.length + 1), productName: defaultProductName }]);
   };
 
   const removeOutputBobbin = (index: number) => {
@@ -442,18 +442,13 @@ export const ProductionProcess: React.FC = () => {
   };
 
   const updateConfeccionOutput = (index: number, field: string, value: string) => {
-    setConfeccionOutputs((prev) => prev.map((output, outputIndex) => {
-      if (outputIndex !== index) return output;
-      if (field === 'productId') {
-        const product = orderProductOptions.find((item: { id: string; name: string }) => item.id === value);
-        return { ...output, productId: value, productName: product?.name || output.productName };
-      }
-      return { ...output, [field]: value };
-    }));
+    setConfeccionOutputs((prev) => prev.map((output, outputIndex) => (
+      outputIndex === index ? { ...output, [field]: value } : output
+    )));
   };
 
   const addConfeccionOutput = () => {
-    setConfeccionOutputs((prev) => [...prev, createInitialConfeccionOutput()]);
+    setConfeccionOutputs((prev) => [...prev, { ...createInitialConfeccionOutput(), productName: defaultProductName }]);
   };
 
   const removeConfeccionOutput = (index: number) => {
@@ -648,7 +643,7 @@ export const ProductionProcess: React.FC = () => {
             .filter((bobbin) => bobbin.kg)
             .map((bobbin, index) => ({
               label: bobbin.label.trim() || `Bobina ${index + 1}`,
-              productName: bobbin.productName || defaultProductName || undefined,
+              productName: bobbin.productName.trim() || undefined,
               kg: bobbin.kg || 0,
               notes: bobbin.notes || undefined
             }))
@@ -658,10 +653,10 @@ export const ProductionProcess: React.FC = () => {
       if (activeStage === 'CONFECCION') {
         payload.specificData = {
           outputs: confeccionOutputs
-            .filter((output) => output.bagQty && (output.productName || output.productId))
+            .filter((output) => output.bagQty && output.productName.trim())
             .map((output) => ({
-              productId: output.productId || undefined,
-              productName: output.productName || defaultProductName,
+              productId: undefined,
+              productName: output.productName.trim(),
               bagQty: output.bagQty || 0,
               notes: output.notes || undefined
             }))
@@ -1198,12 +1193,12 @@ export const ProductionProcess: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="label">Producto</label>
+                        <label className="label">Producto del cliente</label>
                         <input
-                          value={bobbin.productName || defaultProductName}
+                          value={bobbin.productName}
                           onChange={(e) => updateOutputBobbin(index, 'productName', e.target.value)}
                           className="input"
-                          placeholder="Producto"
+                          placeholder="Ej: discos freir, pascualina"
                         />
                       </div>
                       <div>
@@ -1258,26 +1253,13 @@ export const ProductionProcess: React.FC = () => {
                   {confeccionOutputs.map((output, index) => (
                     <div key={index} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr)) auto', gap: '0.75rem', alignItems: 'end' }}>
                       <div>
-                        <label className="label">Producto</label>
-                        {orderProductOptions.length > 0 ? (
-                          <select
-                            value={output.productId}
-                            onChange={(e) => updateConfeccionOutput(index, 'productId', e.target.value)}
-                            className="input"
-                          >
-                            <option value="">Seleccionar producto...</option>
-                            {orderProductOptions.map((product: { id: string; name: string }) => (
-                              <option key={product.id || product.name} value={product.id}>{product.name}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            value={output.productName}
-                            onChange={(e) => updateConfeccionOutput(index, 'productName', e.target.value)}
-                            className="input"
-                            placeholder="Producto"
-                          />
-                        )}
+                        <label className="label">Producto del cliente</label>
+                        <input
+                          value={output.productName}
+                          onChange={(e) => updateConfeccionOutput(index, 'productName', e.target.value)}
+                          className="input"
+                          placeholder="Ej: discos freir, pascualina"
+                        />
                       </div>
                       <div>
                         <label className="label">Cantidad de bolsas</label>
