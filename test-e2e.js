@@ -30,6 +30,22 @@ function assert(condition, message) {
   }
 }
 
+async function expectApiFailure(path, options, expectedMessage) {
+  try {
+    await api(path, options);
+  } catch (error) {
+    if (expectedMessage) {
+      assert(
+        error.message.toLowerCase().includes(expectedMessage.toLowerCase()),
+        `Error inesperado para ${path}: ${error.message}`
+      );
+    }
+    return;
+  }
+
+  throw new Error(`Se esperaba error en ${options.method || 'GET'} ${path}`);
+}
+
 function toNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -148,8 +164,8 @@ async function runTests() {
       techObservations: 'Prueba automatizada'
     },
     colorOrders: [
-      { sequence: 1, colorName: greenSupply.name, supplyId: greenSupply.id },
-      { sequence: 2, colorName: redSupply.name, supplyId: redSupply.id }
+      { sequence: 1, colorName: greenSupply.name },
+      { sequence: 2, colorName: redSupply.name }
     ]
   };
 
@@ -166,9 +182,12 @@ async function runTests() {
   assert(createdOrderDetail.hasSample === true, 'La orden no guardo la muestra');
   assert(createdOrderDetail.technicalSpec?.meters === 1200, 'La ficha tecnica no guardo los metros');
   assert(createdOrderDetail.products?.length === 1, 'La orden no guardo sus productos');
+  const firstColorOrder = createdOrderDetail.colorOrders?.find((color) => color.sequence === 1);
+  const secondColorOrder = createdOrderDetail.colorOrders?.find((color) => color.sequence === 2);
+  assert(firstColorOrder && secondColorOrder, 'La orden no guardo la secuencia de colores');
 
-  console.log('2. Verificando edicion de orden para usuario de maquina...');
-  await api(`/orders/${createdOrder.id}`, {
+  console.log('2. Verificando que planta NO pueda editar la base administrativa...');
+  await expectApiFailure(`/orders/${createdOrder.id}`, {
     method: 'PUT',
     headers: machineHeaders,
     body: JSON.stringify({
@@ -186,12 +205,12 @@ async function runTests() {
         { sequence: 1, colorName: greenSupply.name, supplyId: greenSupply.id },
         { sequence: 2, colorName: redSupply.name, supplyId: redSupply.id }
       ]
-    });
-  });
+    })
+  }, 'Solo administracion');
   const machineEditedOrder = await api(`/orders/${createdOrder.id}`);
   assert(
-    machineEditedOrder.observations === 'Edicion permitida para operario desde ordenes de produccion',
-    'El usuario de maquina no pudo editar la orden'
+    machineEditedOrder.observations === 'Seguimiento end-to-end automatizado',
+    'El usuario de maquina modifico la base de la orden'
   );
 
   console.log('3. Registrando impresion...');
@@ -236,13 +255,36 @@ async function runTests() {
       type: 'PRINTING',
       realMeters: 1180,
       consumptions: [
-        { colorName: greenSupply.name, supplyId: greenSupply.id, loads: '4+3', endValue: '1', realQty: 6, unit: 'kg' },
-        { colorName: redSupply.name, supplyId: redSupply.id, loads: '3+2', endValue: '1', realQty: 4, unit: 'kg' }
+        { colorId: firstColorOrder.id, colorName: greenSupply.name, supplyId: greenSupply.id, lotNumber: 'LOTE-VERDE', loads: '4+3', endValue: '1', realQty: 6, unit: 'kg' },
+        { colorId: secondColorOrder.id, colorName: redSupply.name, supplyId: redSupply.id, lotNumber: 'LOTE-ROJO', loads: '3+2', endValue: '1', realQty: 4, unit: 'kg' }
       ]
     })
   });
 
-  console.log('6. Aprobando impresion desde administracion...');
+  console.log('6. Guardando control observado desde planta...');
+  await api(`/orders/${createdOrder.id}/quality-controls`, {
+    method: 'POST',
+    headers: machineHeaders,
+    body: JSON.stringify({
+      stage: 'IMPRESION',
+      controlData: {
+        status: 'OBSERVADO',
+        observations: 'Desvio controlado desde planta'
+      }
+    })
+  });
+
+  const orderAfterConsumption = await api(`/orders/${createdOrder.id}`);
+  const savedFirstColor = orderAfterConsumption.colorOrders?.find((color) => color.id === firstColorOrder.id);
+  const savedSecondColor = orderAfterConsumption.colorOrders?.find((color) => color.id === secondColorOrder.id);
+  assert(savedFirstColor?.supplyId === greenSupply.id, 'El insumo seleccionado no quedo persistido en el primer color');
+  assert(savedSecondColor?.supplyId === redSupply.id, 'El insumo seleccionado no quedo persistido en el segundo color');
+  assert(
+    orderAfterConsumption.qualityControls?.some((control) => control.stage === 'IMPRESION' && control.data.includes('OBSERVADO')),
+    'El control observado desde planta no se guardo'
+  );
+
+  console.log('7. Aprobando impresion desde administracion...');
   await api(`/orders/${createdOrder.id}`, {
     method: 'PUT',
     headers: adminHeaders,
@@ -251,7 +293,7 @@ async function runTests() {
     })
   });
 
-  console.log('7. Registrando laminacion y sus consumos...');
+  console.log('8. Registrando laminacion y sus consumos...');
   await api('/orders/processes', {
     method: 'POST',
     headers: adminHeaders,
@@ -290,7 +332,7 @@ async function runTests() {
     })
   });
 
-  console.log('8. Registrando refilado...');
+  console.log('9. Registrando refilado...');
   await api('/orders/processes', {
     method: 'POST',
     headers: adminHeaders,
@@ -322,7 +364,7 @@ async function runTests() {
     })
   });
 
-  console.log('9. Registrando inspeccion final...');
+  console.log('10. Registrando inspeccion final...');
   await api(`/orders/${createdOrder.id}/final-inspections`, {
     method: 'POST',
     headers: adminHeaders,
@@ -338,7 +380,7 @@ async function runTests() {
     })
   });
 
-  console.log('10. Finalizando orden...');
+  console.log('11. Finalizando orden...');
   await api(`/orders/${createdOrder.id}/finalize`, {
     method: 'POST',
     headers: adminHeaders
@@ -392,11 +434,20 @@ async function runTests() {
   assert(redDelta === -4, 'El stock del insumo rojo no bajo lo esperado');
   assert(adhesiveDelta === -12, 'El stock del adhesivo no bajo lo esperado');
   assert(reticulantDelta === -2.5, 'El stock del reticulante no bajo lo esperado');
-  assert(productDelta === 5997.3, 'El stock del producto terminado no subio con el neto esperado al finalizar');
+  assert(productDelta === 6000, 'El stock del producto terminado no subio con la cantidad planificada al finalizar');
+
+  console.log('12. Marcando producto entregado desde administracion...');
+  await api(`/orders/${createdOrder.id}/status`, {
+    method: 'PATCH',
+    headers: adminHeaders,
+    body: JSON.stringify({ status: 'Entregadas' })
+  });
+  const deliveredOrder = await api(`/orders/${createdOrder.id}`);
+  assert(deliveredOrder.status === 'Entregadas', 'La orden no quedo marcada como entregada');
 
   console.log('\n=== RESULTADO ===');
-  console.log(`Orden finalizada correctamente: ${finalOrder.orderNumber}`);
-  console.log(`Estado final: ${finalOrder.status}`);
+  console.log(`Orden finalizada y entregada correctamente: ${deliveredOrder.orderNumber}`);
+  console.log(`Estado final: ${deliveredOrder.status}`);
   console.log(`Stock producto: ${productStockBefore} -> ${toNumber(productAfter.stock?.stockActual)}`);
   console.log(`Stock ${greenSupply.name}: ${greenBefore} -> ${toNumber(greenAfter.stock?.stockActual)}`);
   console.log(`Stock ${redSupply.name}: ${redBefore} -> ${toNumber(redAfter.stock?.stockActual)}`);

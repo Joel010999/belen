@@ -36,7 +36,29 @@ const appendUniqueText = (current: string | null | undefined, next: string | nul
   return parts.join(' / ');
 };
 
-const normalizeRole = (role?: string) => (role || 'ADMIN').toUpperCase();
+const normalizeRole = (role?: string) => {
+  const normalized = String(role || 'ADMIN')
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  if (!normalized || normalized.includes('ADMIN')) return 'ADMIN';
+  if (
+    normalized === 'MACHINE' ||
+    normalized.includes('MAQUINA') ||
+    normalized.includes('OPERARIO') ||
+    normalized.includes('PLANTA') ||
+    normalized.includes('IMPRES') ||
+    normalized.includes('LAMIN') ||
+    normalized.includes('REFIL') ||
+    normalized.includes('CONFE')
+  ) {
+    return 'MACHINE';
+  }
+
+  return normalized;
+};
 
 const ensureAdmin = (actor?: ActorContext) => {
   if (normalizeRole(actor?.role) !== 'ADMIN') {
@@ -1868,7 +1890,7 @@ export const getQualityControls = async (orderId: number) => {
 };
 
 export const saveQualityControl = async (data: any, actor?: ActorContext) => {
-  ensureAdmin(actor);
+  ensureProductionActor(actor);
 
   const { orderId, stage, controlData } = data;
 
@@ -2021,6 +2043,34 @@ export const registerConsumptions = async (orderId: number, data: any) => {
   const exchangeRate = exchangeRateResult.rate;
   
   return await prisma.$transaction(async (tx) => {
+    if (data.realMeters !== undefined) {
+      const processTypeMap: Record<string, string> = { PRINTING: 'IMPRESION', LAMINATION: 'LAMINACION', REFILADO: 'REFILADO' };
+      const procType = processTypeMap[type] || type;
+      const process = await tx.productionProcess.findFirst({
+        where: { orderId, type: procType, status: { not: 'Planificada' } },
+        orderBy: { id: 'desc' }
+      });
+      if (process) {
+        const meters = parseFloat(data.realMeters) || 0;
+        if (procType === 'IMPRESION') {
+          await tx.processPrinting.updateMany({
+            where: { processId: process.id },
+            data: { processedMeters: meters }
+          });
+        } else if (procType === 'LAMINACION') {
+          await tx.processLamination.updateMany({
+            where: { processId: process.id },
+            data: { processedMeters: meters }
+          });
+        } else if (procType === 'REFILADO') {
+          await tx.processRefilado.updateMany({
+            where: { processId: process.id },
+            data: { processedMeters: meters }
+          });
+        }
+      }
+    }
+
     // 1. Save general consumptions and deduct stock
     for (const cons of consumptions) {
       if (!cons.supplyId) {
@@ -2040,6 +2090,23 @@ export const registerConsumptions = async (orderId: number, data: any) => {
       if (cons.supplyId) {
         const supplyId = parseInt(cons.supplyId);
         if (isNaN(supplyId)) continue;
+
+        const colorOrderId = parseSafeInt(cons.colorId);
+        if (colorOrderId) {
+          const colorOrder = await tx.colorOrder.findFirst({
+            where: { id: colorOrderId, orderId }
+          });
+
+          if (colorOrder) {
+            await tx.colorOrder.update({
+              where: { id: colorOrder.id },
+              data: {
+                supplyId,
+                lotNumber: appendUniqueText(colorOrder.lotNumber, cons.lotNumber)
+              }
+            });
+          }
+        }
 
         const realQty = parseFloat(cons.realQty) || 0;
         const stockQty = type === 'PRINTING' ? realQty : Math.max(0, realQty);
@@ -2108,7 +2175,7 @@ export const registerConsumptions = async (orderId: number, data: any) => {
               type: isReturn ? 'Devolucion Produccion' : 'Consumo Produccion',
               source: `Orden #${orderId}`,
               orderId,
-              itemType: 'supply',
+              itemType: 'INSUMO',
               supplyId,
               qty: Math.abs(stockQty),
               unit: cons.unit || 'kg',

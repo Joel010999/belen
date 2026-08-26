@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
+import { normalizeRole, type AppRole } from '../utils/authRole';
 
 interface User {
   id: number;
   username: string;
   name: string;
-  role: 'ADMIN' | 'MACHINE';
+  role: AppRole;
   machine?: {
     id: number;
     code: string;
@@ -22,21 +23,29 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+const getSavedUser = (): User | null => {
+  const savedUser = localStorage.getItem('silcar_user');
+  if (!savedUser) return null;
 
-  useEffect(() => {
-    const savedUser = localStorage.getItem('silcar_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-    setLoading(false);
-  }, []);
+  try {
+    const parsedUser = JSON.parse(savedUser);
+    const normalizedUser = { ...parsedUser, role: normalizeRole(parsedUser.role) };
+    localStorage.setItem('silcar_user', JSON.stringify(normalizedUser));
+    return normalizedUser;
+  } catch {
+    localStorage.removeItem('silcar_user');
+    return null;
+  }
+};
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(() => getSavedUser());
+  const [loading] = useState(false);
 
   const login = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('silcar_user', JSON.stringify(userData));
+    const normalizedUser = { ...userData, role: normalizeRole(userData.role) };
+    setUser(normalizedUser);
+    localStorage.setItem('silcar_user', JSON.stringify(normalizedUser));
   };
 
   const logout = () => {
@@ -51,6 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

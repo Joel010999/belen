@@ -69,19 +69,21 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
   useEffect(() => {
     if (order?.colorOrders) {
       setPrintingColors(prev => {
-        return order.colorOrders.map((c: any, index: number) => {
+        const rows = order.colorOrders.map((c: any, index: number) => {
           const existing = prev.find(p => (c.sequence && p.sequence === c.sequence) || p.colorName === c.colorName) || prev[index];
           return {
             id: c.id,
             sequence: c.sequence,
             colorName: c.colorName,
-            supplyId: c.supplyId || c.insumoId,
+            supplyId: existing?.supplyId ?? c.supplyId ?? c.insumoId ?? null,
             lotNumber: existing?.lotNumber || c.lotNumber || '',
             loads: existing?.loads || '',
             endValue: existing?.endValue || '',
             realQty: existing?.realQty || 0
           };
         });
+        const extraRows = prev.filter(p => !p.id && (p.supplyId || p.colorName || p.loads || p.lotNumber || p.endValue));
+        return [...rows, ...extraRows];
       });
     }
     
@@ -240,6 +242,8 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
     try {
       await api.post(`/orders/${order.id}/consumptions`, dataToSend);
       setSuccess(true);
+      setPrintingColors(prev => prev.map(p => ({ ...p, loads: '', endValue: '', realQty: 0 })));
+      setLaminationSupplies(prev => prev.map(p => ({ ...p, loads: '', endValue: '', realQty: 0 })));
       setTimeout(() => {
         setSuccess(false);
         if (onUpdate) onUpdate();
