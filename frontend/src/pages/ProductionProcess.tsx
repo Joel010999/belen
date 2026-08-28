@@ -330,12 +330,25 @@ export const ProductionProcess: React.FC = () => {
       setMetricEntries(
         stageProcess?.metricEntries?.length
           ? stageProcess.metricEntries.map((entry: any, index: number) => ({
-              meters: entry.meters?.toString?.() || '',
-              scrapKg: entry.scrapKg?.toString?.() || '',
-              coilCount: entry.coilCount?.toString?.() || '',
+              meters: entry.meters?.toString?.() ?? '',
+              scrapKg: entry.scrapKg?.toString?.() ?? '',
+              coilCount: entry.coilCount?.toString?.() ?? '',
               description: entry.description || `Tramo ${index + 1}`
             }))
           : [createInitialMetricEntry()]
+      );
+
+      setMaterialLots(
+        stageProcess?.materialLots?.length
+          ? stageProcess.materialLots.map((lot: any) => ({
+              lotNumber: lot.lotNumber || '',
+              kg: lot.kg?.toString?.() ?? '',
+              initialMeters: lot.initialMeters?.toString?.() ?? '',
+              addedMeters: lot.addedMeters?.toString?.() ?? '',
+              finalMeters: lot.finalMeters?.toString?.() ?? '',
+              observations: lot.observations || ''
+            }))
+          : [createInitialMaterialLot()]
       );
     }
 

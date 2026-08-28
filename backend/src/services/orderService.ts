@@ -598,6 +598,8 @@ export const createProcess = async (processData: any) => {
 
     // Save bobbins/lots used by the operator in any plant stage.
     if (processData.materialLots && Array.isArray(processData.materialLots)) {
+      await tx.materialLot.deleteMany({ where: { processId: process.id } });
+
       for (const lot of processData.materialLots) {
         const initial = parseFloat(lot.initialMeters) || 0;
         const added = parseFloat(lot.addedMeters) || 0;
