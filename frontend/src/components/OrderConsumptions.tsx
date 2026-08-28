@@ -118,6 +118,12 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
     }).format(value);
   };
 
+  const formatKg = (value: unknown) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return '0.00';
+    return parsed.toFixed(2);
+  };
+
   const getSupplyPrice = (item: any) => {
     const supply = supplies.find((s) => s.id === item.supplyId);
     const price = Number(supply?.price);
@@ -416,7 +422,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
                   />
                 </td>
                 <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 800, color: item.realQty < 0 ? 'var(--success)' : 'var(--primary)', fontSize: '1.2rem' }}>
-                  {item.realQty} <span style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>kg</span>
+                  {formatKg(item.realQty)} <span style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>kg</span>
                 </td>
                 {canViewCosts && (
                   <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 700, color: 'var(--text-muted)' }}>
