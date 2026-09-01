@@ -390,7 +390,7 @@ export const OrderForm: React.FC = () => {
           {formData.products.map((productRow, index) => (
             <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', marginBottom: '1rem' }}>
               <div>
-                <label className="label">Producto Terminado</label>
+                <label className="label">Medida del material</label>
                 <select
                   value={productRow.productId}
                   onChange={(e) => handleProductChange(index, 'productId', e.target.value)}
