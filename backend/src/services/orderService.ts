@@ -537,6 +537,14 @@ export const createProcess = async (processData: any) => {
       },
       orderBy: { id: 'desc' }
     });
+    const existingOperational = existingInProgress ?? await tx.productionProcess.findFirst({
+      where: {
+        orderId: parseInt(orderId),
+        type,
+        status: { not: 'Planificada' }
+      },
+      orderBy: { id: 'desc' }
+    });
 
     const hasScrapEntriesPayload = type === 'REFILADO' && Array.isArray(specificData?.scrapEntries);
     const scrapEntries = hasScrapEntriesPayload
@@ -553,26 +561,26 @@ export const createProcess = async (processData: any) => {
     const metricTotals = getProcessMetricTotals(metricEntries);
 
     const processPayload = {
-      machineId: machineId ? parseInt(machineId) : existingInProgress?.machineId ?? null,
-      operatorId: operatorId ? parseInt(operatorId) : existingInProgress?.operatorId ?? null,
-      endTime: endTime ? new Date(endTime) : existingInProgress?.endTime ?? null,
+      machineId: machineId ? parseInt(machineId) : existingOperational?.machineId ?? null,
+      operatorId: operatorId ? parseInt(operatorId) : existingOperational?.operatorId ?? null,
+      endTime: endTime ? new Date(endTime) : existingOperational?.endTime ?? null,
       scrapKg: hasMetricEntriesPayload
         ? metricTotals.scrapKg
         : hasScrapEntriesPayload
           ? scrapKgFromEntries
-          : (scrapKg ? parseFloat(scrapKg) : existingInProgress?.scrapKg ?? 0),
-      observations: observations ?? existingInProgress?.observations ?? null,
+          : (scrapKg ? parseFloat(scrapKg) : existingOperational?.scrapKg ?? 0),
+      observations: observations ?? existingOperational?.observations ?? null,
     };
-    const previousScrapKg = existingInProgress?.scrapKg || 0;
+    const previousScrapKg = existingOperational?.scrapKg || 0;
     const nextScrapKg = Number(processPayload.scrapKg) || 0;
     const scrapDeltaKg = Math.max(0, nextScrapKg - previousScrapKg);
 
-    const process = existingInProgress
+    const process = existingOperational
       ? await tx.productionProcess.update({
-          where: { id: existingInProgress.id },
+          where: { id: existingOperational.id },
           data: {
             ...processPayload,
-            status: endTime ? 'finalizado' : existingInProgress.status
+            status: endTime ? 'finalizado' : existingOperational.status
           }
         })
       : await tx.productionProcess.create({
@@ -859,6 +867,13 @@ export const updateStageAction = async (orderId: number, data: any, actor?: Acto
 
     if (action === 'START') {
       if (latestInProgress) {
+        const nextOperatorId = parseSafeInt(data.operatorId);
+        if (nextOperatorId && !latestInProgress.operatorId) {
+          return await tx.productionProcess.update({
+            where: { id: latestInProgress.id },
+            data: { operatorId: nextOperatorId }
+          });
+        }
         return latestInProgress;
       }
 

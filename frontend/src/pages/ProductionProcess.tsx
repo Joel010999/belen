@@ -263,6 +263,13 @@ export const ProductionProcess: React.FC = () => {
       return left - right;
     })[0];
   }, [activeStage, selectedOrder]);
+  const lastStageOperatorId = useMemo(() => {
+    const processes = selectedOrder?.processes?.filter((process: any) => process.type === activeStage && process.status !== 'Planificada') || [];
+    const processWithOperator = processes
+      .sort((a: any, b: any) => new Date(b.endTime || b.startTime || 0).getTime() - new Date(a.endTime || a.startTime || 0).getTime())
+      .find((process: any) => process.operatorId);
+    return processWithOperator?.operatorId?.toString?.() || '';
+  }, [activeStage, selectedOrder]);
   const isStagePlanned = plannedStages.includes(activeStage);
   const isStageInProcess = stageProcess?.status === 'en_proceso';
   const isStageFinished = Boolean(selectedOrder?.[APPROVAL_FIELDS[activeStage]]) || stageProcess?.status === 'finalizado';
@@ -289,7 +296,7 @@ export const ProductionProcess: React.FC = () => {
     const nextStageData = {
       ...createInitialStageData(),
       machineId,
-      operatorId: stageProcess?.operatorId?.toString?.() || '',
+      operatorId: stageProcess?.operatorId?.toString?.() || lastStageOperatorId,
       processedMeters: (
         stageProcess?.printingData?.processedMeters ??
         stageProcess?.laminationData?.processedMeters ??
@@ -386,7 +393,7 @@ export const ProductionProcess: React.FC = () => {
           : [{ ...createInitialConfeccionOutput(), productName: defaultProductName, productId: orderProductOptions[0]?.id || '' }]
       );
     }
-  }, [activeStage, defaultProductName, orderProductOptions, plannedStageProcess?.machineId, selectedOrder, stageProcess, user?.machine?.id, user?.machine?.type, user?.role]);
+  }, [activeStage, defaultProductName, lastStageOperatorId, orderProductOptions, plannedStageProcess?.machineId, selectedOrder, stageProcess, user?.machine?.id, user?.machine?.type, user?.role]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const target = e.target;
