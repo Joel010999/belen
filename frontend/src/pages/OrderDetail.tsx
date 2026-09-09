@@ -439,14 +439,14 @@ export const OrderDetail: React.FC = () => {
             <DataField label="Corte" value={order?.technicalSpec?.cut} />
             <DataField label="Lamina / Material" value={order?.technicalSpec?.lamina} />
             <DataField label="Metros Previstos" value={order?.technicalSpec?.meters ? `${order.technicalSpec.meters} m` : '-'} />
-            <DataField label="Tubo" value={order?.technicalSpec?.tube} />
+            <DataField label="Impresión en" value={order?.technicalSpec?.tube} />
             <DataField label="Tipo Impresion" value={order?.technicalSpec?.printingType} />
             <DataField label="Sentido salida impresion" value={order?.technicalSpec?.printingExitSense} />
             <DataField label="Diametro bobina impresion" value={order?.technicalSpec?.printingCoilDiameter} />
-            <DataField label="Pie" value={order?.technicalSpec?.pie} />
-            <DataField label="Cabeza" value={order?.technicalSpec?.cabeza} />
-            <DataField label="Taca Derecha" value={order?.technicalSpec?.tacaRight} />
-            <DataField label="Taca Izquierda" value={order?.technicalSpec?.tacaLeft} />
+            <DataField label="Pie" value={order?.technicalSpec?.pie ? 'Marcado' : 'Sin marcar'} />
+            <DataField label="Cabeza" value={order?.technicalSpec?.cabeza ? 'Marcado' : 'Sin marcar'} />
+            <DataField label="Taca Derecha" value={order?.technicalSpec?.tacaRight ? 'Marcado' : 'Sin marcar'} />
+            <DataField label="Taca Izquierda" value={order?.technicalSpec?.tacaLeft ? 'Marcado' : 'Sin marcar'} />
             <DataField label="Clise Centrado" value={order?.technicalSpec?.clisheAlignment} />
             <div style={{ gridColumn: 'span 2', borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: '0.5rem' }}>
               <p style={{ fontSize: '0.75rem', fontWeight: 900, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Refiladora corte</p>

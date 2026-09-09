@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Save, Package, Ruler, ClipboardList, Layers, Plus, Trash2, Users, Cpu } from 'lucide-react';
+import { Save, Package, Ruler, ClipboardList, Layers, Plus, Trash2, Users, Cpu, Check } from 'lucide-react';
 import api from '../services/api';
 import { FormSection } from '../components/FormSection';
 import { useAuth } from '../hooks/useAuth';
@@ -223,6 +223,34 @@ export const OrderForm: React.FC = () => {
         ? [...prev.machineIds, machineId]
         : prev.machineIds.filter((idValue) => idValue !== machineId)
     }));
+  };
+
+  const togglePrintFormat = (format: 'Tubo' | 'Lámina') => {
+    setFormData((prev) => ({
+      ...prev,
+      technicalSpec: {
+        ...prev.technicalSpec,
+        tube: prev.technicalSpec.tube === format ? '' : format
+      }
+    }));
+  };
+
+  const toggleExclusiveTechnicalMark = (
+    field: 'pie' | 'cabeza' | 'tacaRight' | 'tacaLeft',
+    oppositeField: 'pie' | 'cabeza' | 'tacaRight' | 'tacaLeft'
+  ) => {
+    setFormData((prev) => {
+      const isSelected = Boolean(prev.technicalSpec[field]);
+
+      return {
+        ...prev,
+        technicalSpec: {
+          ...prev.technicalSpec,
+          [field]: isSelected ? '' : 'X',
+          [oppositeField]: ''
+        }
+      };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -472,8 +500,28 @@ export const OrderForm: React.FC = () => {
           <input name="technicalSpec.meters" value={formData.technicalSpec.meters} onChange={handleInputChange} type="number" className="input" placeholder="1200" />
         </div>
         <div>
-          <label className="label">Tipo de Tubo</label>
-          <input name="technicalSpec.tube" value={formData.technicalSpec.tube} onChange={handleInputChange} type="text" className="input" />
+          <fieldset className="technical-choice-group">
+            <legend className="label">Impresión en</legend>
+            <div className="technical-choice-options">
+              {(['Tubo', 'Lámina'] as const).map((format) => {
+                const selected = formData.technicalSpec.tube === format;
+
+                return (
+                  <label key={format} className={`technical-choice${selected ? ' technical-choice-selected' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => togglePrintFormat(format)}
+                    />
+                    <span className="technical-choice-indicator" aria-hidden="true">
+                      {selected && <Check size={14} strokeWidth={3} />}
+                    </span>
+                    <span>{format}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
         </div>
         <div>
           <label className="label">Tipo de Impresion</label>
@@ -495,20 +543,58 @@ export const OrderForm: React.FC = () => {
           <input name="technicalSpec.colorCount" value={formData.technicalSpec.colorCount} onChange={handleInputChange} type="number" className="input" />
         </div>
         <div>
-          <label className="label">Pie</label>
-          <input name="technicalSpec.pie" value={formData.technicalSpec.pie} onChange={handleInputChange} type="text" className="input" />
+          <fieldset className="technical-choice-group">
+            <legend className="label">Posición de impresión</legend>
+            <div className="technical-choice-options">
+              {([
+                { field: 'pie', label: 'Pie', oppositeField: 'cabeza' },
+                { field: 'cabeza', label: 'Cabeza', oppositeField: 'pie' }
+              ] as const).map(({ field, label, oppositeField }) => {
+                const selected = Boolean(formData.technicalSpec[field]);
+
+                return (
+                  <label key={field} className={`technical-choice${selected ? ' technical-choice-selected' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleExclusiveTechnicalMark(field, oppositeField)}
+                    />
+                    <span className="technical-choice-indicator" aria-hidden="true">
+                      {selected && <Check size={14} strokeWidth={3} />}
+                    </span>
+                    <span>{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
         </div>
         <div>
-          <label className="label">Cabeza</label>
-          <input name="technicalSpec.cabeza" value={formData.technicalSpec.cabeza} onChange={handleInputChange} type="text" className="input" />
-        </div>
-        <div>
-          <label className="label">Taca Derecha</label>
-          <input name="technicalSpec.tacaRight" value={formData.technicalSpec.tacaRight} onChange={handleInputChange} type="text" className="input" />
-        </div>
-        <div>
-          <label className="label">Taca Izquierda</label>
-          <input name="technicalSpec.tacaLeft" value={formData.technicalSpec.tacaLeft} onChange={handleInputChange} type="text" className="input" />
+          <fieldset className="technical-choice-group">
+            <legend className="label">Taca</legend>
+            <div className="technical-choice-options">
+              {([
+                { field: 'tacaRight', label: 'Derecha', oppositeField: 'tacaLeft' },
+                { field: 'tacaLeft', label: 'Izquierda', oppositeField: 'tacaRight' }
+              ] as const).map(({ field, label, oppositeField }) => {
+                const selected = Boolean(formData.technicalSpec[field]);
+
+                return (
+                  <label key={field} className={`technical-choice${selected ? ' technical-choice-selected' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleExclusiveTechnicalMark(field, oppositeField)}
+                    />
+                    <span className="technical-choice-indicator" aria-hidden="true">
+                      {selected && <Check size={14} strokeWidth={3} />}
+                    </span>
+                    <span>{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
         </div>
         <div>
           <label className="label">Clise Centrado Izq / Der</label>

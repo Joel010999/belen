@@ -843,7 +843,7 @@ export const ProductionProcess: React.FC = () => {
             <div>
               <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Configuracion</p>
               <p style={{ fontWeight: 700 }}>
-                {selectedOrder.technicalSpec?.printingType || '-'} / Pie {selectedOrder.technicalSpec?.pie || '-'} / Cabeza {selectedOrder.technicalSpec?.cabeza || '-'}
+                {selectedOrder.technicalSpec?.tube || 'Sin definir'} / {selectedOrder.technicalSpec?.printingType || '-'} / {selectedOrder.technicalSpec?.pie ? 'Pie' : selectedOrder.technicalSpec?.cabeza ? 'Cabeza' : 'Posición sin definir'} / {selectedOrder.technicalSpec?.tacaRight ? 'Taca derecha' : selectedOrder.technicalSpec?.tacaLeft ? 'Taca izquierda' : 'Taca sin definir'}
               </p>
             </div>
             <div style={{ gridColumn: 'span 2' }}>
