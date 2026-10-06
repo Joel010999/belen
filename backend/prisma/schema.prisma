@@ -131,6 +131,15 @@ model TechnicalSpec {
   refiladoAnchoEspira  Float?
   refiladoCoilDiameter Float?
   refiladoMeters       Float?
+  laminationStructure     String?
+  laminationAdhesive      String?
+  laminationReticulant    String?
+  laminationDiluent       String?
+  laminationViscosity     Float?
+  laminationOvenTemp      Float?
+  laminationCalenderTemp  Float?
+  laminationAdhesiveLoad  Float?
+  laminationObservations  String?
   order                ProductionOrder @relation(fields: [orderId], references: [id])
 }
 
@@ -508,9 +517,10 @@ model Attachment {
 model OrderProduct {
   id         Int             @id @default(autoincrement())
   orderId    Int
-  productId  Int
-  plannedQty String
-  order      ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId    Int
+  plannedQty   String
+  materialType String?
+  order        ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product    Product         @relation(fields: [productId], references: [id])
 }
 
