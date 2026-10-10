@@ -172,15 +172,7 @@ export const OrderForm: React.FC = () => {
   }, [id, isEditing, user?.id]);
 
   useEffect(() => {
-    const derivedMeasure = formData.products
-      .map(p => products.find(prod => prod.id.toString() === p.productId)?.name)
-      .filter(Boolean)
-      .join(' / ');
-
-    let derivedMeters = formData.products.reduce((acc, p) => acc + (parseFloat(p.plannedQty) || 0), 0);
-
-    setFormData(prev => {
-      const newMeters = derivedMeters ? derivedMeters.toString() : '';
+        setFormData(prev => {
       const refiladoDePie = Boolean(prev.technicalSpec.pie);
       const refiladoDeCabeza = Boolean(prev.technicalSpec.cabeza);
       const refiladoExitSense = refiladoDePie ? 'De pie' : refiladoDeCabeza ? 'De cabeza' : '';
@@ -188,8 +180,6 @@ export const OrderForm: React.FC = () => {
       const refiladoTacaLeft = prev.technicalSpec.tacaLeft ? 'Izquierda' : '';
 
       if (
-        prev.technicalSpec.materialMeasure === derivedMeasure &&
-        prev.technicalSpec.meters === newMeters &&
         prev.technicalSpec.refiladoDePie === refiladoDePie &&
         prev.technicalSpec.refiladoDeCabeza === refiladoDeCabeza &&
         prev.technicalSpec.refiladoExitSense === refiladoExitSense &&
@@ -202,8 +192,6 @@ export const OrderForm: React.FC = () => {
         ...prev,
         technicalSpec: {
           ...prev.technicalSpec,
-          materialMeasure: derivedMeasure,
-          meters: newMeters,
           refiladoDePie,
           refiladoDeCabeza,
           refiladoExitSense,
@@ -213,8 +201,6 @@ export const OrderForm: React.FC = () => {
       };
     });
   }, [
-    formData.products,
-    products,
     formData.technicalSpec.pie,
     formData.technicalSpec.cabeza,
     formData.technicalSpec.tacaRight,
@@ -566,8 +552,8 @@ export const OrderForm: React.FC = () => {
 
       <FormSection title="Especificacion Tecnica" icon={<Ruler size={24} />}>
         <div>
-          <label className="label">Medida Material (Derivada)</label>
-          <input name="technicalSpec.materialMeasure" value={formData.technicalSpec.materialMeasure} type="text" className="input" readOnly style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }} />
+          <label className="label">Medida Material</label>
+          <input name="technicalSpec.materialMeasure" value={formData.technicalSpec.materialMeasure} onChange={handleInputChange} type="text" className="input" placeholder="Ej: 16/40" />
         </div>
         <div>
           <label className="label">Corte</label>
@@ -578,8 +564,8 @@ export const OrderForm: React.FC = () => {
           <input name="technicalSpec.lamina" value={formData.technicalSpec.lamina} onChange={handleInputChange} type="text" className="input" placeholder="Ej: Polipropileno" />
         </div>
         <div>
-          <label className="label">Metros Totales a Imprimir (Derivados)</label>
-          <input name="technicalSpec.meters" value={formData.technicalSpec.meters} type="text" className="input" readOnly style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }} />
+          <label className="label">Metros Totales a Imprimir</label>
+          <input name="technicalSpec.meters" value={formData.technicalSpec.meters} onChange={handleInputChange} type="number" className="input" placeholder="1200" />
         </div>
         <div>
           <fieldset className="technical-choice-group">
