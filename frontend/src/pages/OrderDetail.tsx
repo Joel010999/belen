@@ -39,7 +39,7 @@ const CONTROL_CHECKLIST_ITEMS = [
 
 const LAMINATION_CHECKLIST_ITEMS = [
   { time: 'Campo', controlName: 'Nombre encargado', checked: false, value: '' },
-  { time: 'Control', controlName: 'Carga 0.022', checked: false, value: '' },
+  { time: 'Campo', controlName: 'Carga', checked: false, value: '' },
   { time: 'Control', controlName: 'Ancho', checked: false, value: '' },
   { time: 'Control', controlName: 'Tipo material', checked: false, value: '' },
   { time: 'Control', controlName: 'Sin agujas', checked: false, value: '' }
@@ -66,7 +66,6 @@ const CHECKLIST_BOOLEAN_FIELDS = new Set([
   'Corte',
   'Tono',
   'Ancho material',
-  'Carga 0.022',
   'Ancho',
   'Tipo material',
   'Sin agujas',
@@ -441,7 +440,6 @@ export const OrderDetail: React.FC = () => {
             <DataField label="Metros Previstos" value={order?.technicalSpec?.meters ? `${order.technicalSpec.meters} m` : '-'} />
             <DataField label="Impresión en" value={order?.technicalSpec?.tube} />
             <DataField label="Tipo Impresion" value={order?.technicalSpec?.printingType} />
-            <DataField label="Sentido salida impresion" value={order?.technicalSpec?.printingExitSense} />
             <DataField label="Diametro bobina impresion" value={order?.technicalSpec?.printingCoilDiameter} />
             <DataField label="Pie" value={order?.technicalSpec?.pie ? 'Marcado' : 'Sin marcar'} />
             <DataField label="Cabeza" value={order?.technicalSpec?.cabeza ? 'Marcado' : 'Sin marcar'} />
@@ -468,6 +466,23 @@ export const OrderDetail: React.FC = () => {
             <div style={{ gridColumn: 'span 2' }}>
               <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Observaciones Tecnicas</p>
               <p style={{ fontSize: '0.875rem', fontWeight: 500, whiteSpace: 'pre-line' }}>{order?.technicalSpec?.techObservations || '-'}</p>
+            </div>
+          </FormSection>
+
+          <FormSection title="Laminacion" icon={<FlaskConical size={24} />}>
+            <div style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.85rem' }}>
+              <DataField label="Material o Estructura" value={order?.technicalSpec?.laminationStructure} />
+              <DataField label="Adhesivo" value={order?.technicalSpec?.laminationAdhesive} />
+              <DataField label="Reticulante" value={order?.technicalSpec?.laminationReticulant} />
+              <DataField label="Diluyente" value={order?.technicalSpec?.laminationDiluent} />
+              <DataField label="Viscosidad" value={order?.technicalSpec?.laminationViscosity} />
+              <DataField label="Temp. Tunel (°C)" value={order?.technicalSpec?.laminationOvenTemp} />
+              <DataField label="Temp. Calandra (°C)" value={order?.technicalSpec?.laminationCalenderTemp} />
+              <DataField label="Carga de Adhesivo" value={order?.technicalSpec?.laminationAdhesiveLoad} />
+            </div>
+            <div style={{ gridColumn: 'span 2', marginTop: '0.5rem' }}>
+              <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Observaciones Laminacion</p>
+              <p style={{ fontSize: '0.875rem', fontWeight: 500, whiteSpace: 'pre-line' }}>{order?.technicalSpec?.laminationObservations || '-'}</p>
             </div>
           </FormSection>
 
@@ -611,11 +626,13 @@ export const OrderDetail: React.FC = () => {
                   <div key={idx} style={{ marginBottom: '0.5rem' }}>
                     <p style={{ fontSize: '0.875rem' }}>Producto {idx + 1}: <b>{p.product?.name}</b></p>
                     <p style={{ fontSize: '0.875rem' }}>Objetivo: <b>{p.plannedQty}</b></p>
+                    <p style={{ fontSize: '0.875rem' }}>Material: <b>{p.materialType || 'Sin especificar'}</b></p>
                   </div>
                 )) : (
                   <div>
                     <p style={{ fontSize: '0.875rem' }}>Producto: <b>{order.product?.name}</b></p>
                     <p style={{ fontSize: '0.875rem' }}>Objetivo: <b>{order.plannedQty}</b></p>
+                    <p style={{ fontSize: '0.875rem' }}>Material: <b>{order.products?.[0]?.materialType || 'Sin especificar'}</b></p>
                   </div>
                 )}
               </div>

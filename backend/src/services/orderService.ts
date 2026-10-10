@@ -208,12 +208,12 @@ const enrichOrderOperationalState = (order: any) => {
 export const createOrder = async (orderData: any, actor?: ActorContext) => {
   ensureAdmin(actor);
 
-  const { 
-    orderNumber, 
-    clientId, 
-    productId, 
-    plannedQty, 
-    unit, 
+  const {
+    orderNumber,
+    clientId,
+    productId,
+    plannedQty,
+    unit,
     creatorId,
     operatorIds,
     technicalSpec,
@@ -265,7 +265,8 @@ export const createOrder = async (orderData: any, actor?: ActorContext) => {
           data: {
             orderId: order.id,
             productId: parseInt(prod.productId),
-            plannedQty: String(prod.plannedQty)
+            plannedQty: String(prod.plannedQty),
+            materialType: prod.materialType || null
           }
         });
       }
@@ -318,7 +319,7 @@ export const createOrder = async (orderData: any, actor?: ActorContext) => {
           productId: finalProductId,
           qty: qtyNum,
           unit: unit || 'UN',
-          sign: 0, 
+          sign: 0,
           orderId: order.id,
           observations: `Reserva para orden ${orderNumber}`
         }
@@ -354,6 +355,17 @@ export const createOrder = async (orderData: any, actor?: ActorContext) => {
           refiladoAnchoEspira: parseSafeFloat(technicalSpec.refiladoAnchoEspira),
           refiladoCoilDiameter: parseSafeFloat(technicalSpec.refiladoCoilDiameter),
           refiladoMeters: parseSafeFloat(technicalSpec.refiladoMeters),
+          laminationStructure: technicalSpec.laminationStructure,
+          laminationAdhesive: technicalSpec.laminationAdhesive,
+          laminationReticulant: technicalSpec.laminationReticulant,
+          laminationDiluent: technicalSpec.laminationDiluent,
+          laminationViscosity: parseSafeFloat(technicalSpec.laminationViscosity),
+          laminationOvenTemp: parseSafeFloat(technicalSpec.laminationOvenTemp),
+          laminationCalenderTemp: parseSafeFloat(technicalSpec.laminationCalenderTemp),
+          laminationAdhesiveLoad: parseSafeFloat(technicalSpec.laminationAdhesiveLoad),
+          laminationObservations: technicalSpec.laminationObservations,
+
+
         }
       });
     }
@@ -398,9 +410,9 @@ const buildMonthRange = (month?: string) => {
 export const getAllOrders = async (machineId?: number, month?: string) => {
   const where: any = {};
   const monthRange = buildMonthRange(month);
-  
+
   if (machineId) {
-    // If filtered by machine, show orders created ON that machine 
+    // If filtered by machine, show orders created ON that machine
     // OR orders that have a process on that machine
     where.OR = [
       { machineId },
@@ -507,16 +519,16 @@ export const getOrderById = async (id: number) => {
 };
 
 export const createProcess = async (processData: any) => {
-  const { 
-    orderId, 
-    type, 
-    machineId, 
-    operatorId, 
-    startTime, 
-    endTime, 
-    scrapKg, 
+  const {
+    orderId,
+    type,
+    machineId,
+    operatorId,
+    startTime,
+    endTime,
+    scrapKg,
     observations,
-    specificData 
+    specificData
   } = processData;
 
   return await prisma.$transaction(async (tx) => {
@@ -630,7 +642,7 @@ export const createProcess = async (processData: any) => {
         });
 
         // Discount from stock if material is identifiable
-        // Since we don't have a direct supplyId for the lot yet, 
+        // Since we don't have a direct supplyId for the lot yet,
         // we record a movement linked to the order's product or material.
         await tx.stockMovement.create({
           data: {
@@ -926,16 +938,16 @@ export const updateStageAction = async (orderId: number, data: any, actor?: Acto
 export const getDashboardStats = async (machineId?: number) => {
   const whereOrder: any = {};
   const whereProcess: any = {};
-  
+
   if (machineId) {
     whereOrder.processes = { some: { machineId } };
     whereProcess.machineId = machineId;
   }
 
   const [
-    openOrders, 
-    finishedOrders, 
-    pendingControl, 
+    openOrders,
+    finishedOrders,
+    pendingControl,
     pendingExport,
     stockItems,
     allProcesses,
@@ -946,7 +958,7 @@ export const getDashboardStats = async (machineId?: number) => {
     prisma.productionOrder.count({ where: { ...whereOrder, status: 'En proceso' } }),
     prisma.stockMovement.count({ where: { exported: false } }),
     prisma.currentStock.findMany(),
-    prisma.productionProcess.findMany({ 
+    prisma.productionProcess.findMany({
       where: whereProcess,
       include: {
         materialLots: true,
@@ -965,13 +977,13 @@ export const getDashboardStats = async (machineId?: number) => {
 
   const availableStock = stockItems.reduce((acc, item) => acc + item.stockActual, 0);
   const lowStockAlerts = stockItems.filter(item => item.stockActual < (item.minStock || 100)).length;
-  
+
   let totalProcessedMeters = 0;
   let totalScrapKg = 0;
 
   allProcesses.forEach(p => {
     totalScrapKg += p.scrapKg || 0;
-    
+
     // Sum from material lots if they exist (Printing/Lamination)
     if (p.materialLots && p.materialLots.length > 0) {
       totalProcessedMeters += p.materialLots.reduce((acc, lot) => acc + (lot.totalUsedMeters || 0), 0);
@@ -1002,8 +1014,8 @@ export const getDashboardStats = async (machineId?: number) => {
 
 export const getCostStats = async () => {
   const orders = await prisma.productionOrder.findMany({
-    where: { 
-      consumptions: { some: {} } 
+    where: {
+      consumptions: { some: {} }
     },
     include: {
       consumptions: { include: { supply: true } }
@@ -1015,7 +1027,7 @@ export const getCostStats = async () => {
   const stats = orders.map(o => {
     let plannedKg = 0;
     let realKg = 0;
-    
+
     o.consumptions.forEach(c => {
       plannedKg += c.plannedQty || 0;
       realKg += c.realQty || 0;
@@ -1617,7 +1629,7 @@ export const exportAlegonDetallePalm = async (month?: string) => {
 export const updateOrder = async (id: number, orderData: any, actor?: ActorContext) => {
   ensureAdmin(actor);
 
-  const { 
+  const {
     orderNumber, clientId, productId, plannedQty, unit, products,
     machineIds, operatorsText, technicalSpec, colorOrders,
     classification, workType, hasSample, estimatedBagQty,
@@ -1663,7 +1675,8 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
           data: {
             orderId: id,
             productId: parseInt(productRow.productId),
-            plannedQty: String(productRow.plannedQty)
+            plannedQty: String(productRow.plannedQty),
+            materialType: productRow.materialType || null
           }
         });
       }
@@ -1697,6 +1710,17 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
           refiladoAnchoEspira: parseSafeFloat(technicalSpec.refiladoAnchoEspira),
           refiladoCoilDiameter: parseSafeFloat(technicalSpec.refiladoCoilDiameter),
           refiladoMeters: parseSafeFloat(technicalSpec.refiladoMeters),
+          laminationStructure: technicalSpec.laminationStructure,
+          laminationAdhesive: technicalSpec.laminationAdhesive,
+          laminationReticulant: technicalSpec.laminationReticulant,
+          laminationDiluent: technicalSpec.laminationDiluent,
+          laminationViscosity: parseSafeFloat(technicalSpec.laminationViscosity),
+          laminationOvenTemp: parseSafeFloat(technicalSpec.laminationOvenTemp),
+          laminationCalenderTemp: parseSafeFloat(technicalSpec.laminationCalenderTemp),
+          laminationAdhesiveLoad: parseSafeFloat(technicalSpec.laminationAdhesiveLoad),
+          laminationObservations: technicalSpec.laminationObservations,
+
+
         },
         create: {
           orderId: id,
@@ -1722,6 +1746,17 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
           refiladoAnchoEspira: parseSafeFloat(technicalSpec.refiladoAnchoEspira),
           refiladoCoilDiameter: parseSafeFloat(technicalSpec.refiladoCoilDiameter),
           refiladoMeters: parseSafeFloat(technicalSpec.refiladoMeters),
+          laminationStructure: technicalSpec.laminationStructure,
+          laminationAdhesive: technicalSpec.laminationAdhesive,
+          laminationReticulant: technicalSpec.laminationReticulant,
+          laminationDiluent: technicalSpec.laminationDiluent,
+          laminationViscosity: parseSafeFloat(technicalSpec.laminationViscosity),
+          laminationOvenTemp: parseSafeFloat(technicalSpec.laminationOvenTemp),
+          laminationCalenderTemp: parseSafeFloat(technicalSpec.laminationCalenderTemp),
+          laminationAdhesiveLoad: parseSafeFloat(technicalSpec.laminationAdhesiveLoad),
+          laminationObservations: technicalSpec.laminationObservations,
+
+
         }
       });
     }
@@ -2058,7 +2093,7 @@ export const registerConsumptions = async (orderId: number, data: any) => {
     ? { rate: postedExchangeRate }
     : await getCurrentUsdExchangeRate();
   const exchangeRate = exchangeRateResult.rate;
-  
+
   return await prisma.$transaction(async (tx) => {
     if (data.realMeters !== undefined) {
       const processTypeMap: Record<string, string> = { PRINTING: 'IMPRESION', LAMINATION: 'LAMINACION', REFILADO: 'REFILADO' };

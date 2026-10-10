@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Save, Package, Ruler, ClipboardList, Layers, Plus, Trash2, Users, Cpu, Check } from 'lucide-react';
+import { Save, Package, Ruler, ClipboardList, Layers, Plus, Trash2, Users, Cpu, Check, FlaskConical } from 'lucide-react';
 import api from '../services/api';
 import { FormSection } from '../components/FormSection';
 import { useAuth } from '../hooks/useAuth';
@@ -33,7 +33,7 @@ export const OrderForm: React.FC = () => {
     workType: WORK_TYPE_OPTIONS[0],
     hasSample: true,
     estimatedBagQty: '',
-    products: [{ productId: '', plannedQty: '' }],
+    products: [{ productId: '', plannedQty: '', materialType: '' }],
     unit: 'Metros',
     creatorId: user?.id?.toString() || '1',
     machineIds: [] as string[],
@@ -64,7 +64,16 @@ export const OrderForm: React.FC = () => {
       refiladoTacaLeft: '',
       refiladoAnchoEspira: '',
       refiladoCoilDiameter: '',
-      refiladoMeters: ''
+      refiladoMeters: '',
+      laminationStructure: '',
+      laminationAdhesive: '',
+      laminationReticulant: '',
+      laminationDiluent: '',
+      laminationViscosity: '',
+      laminationOvenTemp: '',
+      laminationCalenderTemp: '',
+      laminationAdhesiveLoad: '',
+      laminationObservations: ''
     },
     colorOrders: [
       { sequence: 1, colorName: '', formula: '', lotNumber: '', changesToConsider: '' }
@@ -97,8 +106,8 @@ export const OrderForm: React.FC = () => {
             hasSample: Boolean(order.hasSample),
             estimatedBagQty: order.estimatedBagQty?.toString() || '',
             products: order.products?.length > 0
-              ? order.products.map((p: any) => ({ productId: p.productId.toString(), plannedQty: p.plannedQty }))
-              : [{ productId: order.productId?.toString() || '', plannedQty: order.plannedQty?.toString() || '' }],
+              ? order.products.map((p: any) => ({ productId: p.productId.toString(), plannedQty: p.plannedQty, materialType: p.materialType || '' }))
+              : [{ productId: order.productId?.toString() || '', plannedQty: order.plannedQty?.toString() || '', materialType: '' }],
             unit: order.unit || 'Metros',
             creatorId: order.creatorId?.toString() || user?.id?.toString() || '1',
             machineIds: order.processes?.some((p: any) => p.status === 'Planificada')
@@ -131,7 +140,16 @@ export const OrderForm: React.FC = () => {
               refiladoTacaLeft: order.technicalSpec?.refiladoTacaLeft || '',
               refiladoAnchoEspira: order.technicalSpec?.refiladoAnchoEspira?.toString() || '',
               refiladoCoilDiameter: order.technicalSpec?.refiladoCoilDiameter?.toString() || '',
-              refiladoMeters: order.technicalSpec?.refiladoMeters?.toString() || ''
+              refiladoMeters: order.technicalSpec?.refiladoMeters?.toString() || '',
+              laminationStructure: order.technicalSpec?.laminationStructure || '',
+              laminationAdhesive: order.technicalSpec?.laminationAdhesive || '',
+              laminationReticulant: order.technicalSpec?.laminationReticulant || '',
+              laminationDiluent: order.technicalSpec?.laminationDiluent || '',
+              laminationViscosity: order.technicalSpec?.laminationViscosity?.toString() || '',
+              laminationOvenTemp: order.technicalSpec?.laminationOvenTemp?.toString() || '',
+              laminationCalenderTemp: order.technicalSpec?.laminationCalenderTemp?.toString() || '',
+              laminationAdhesiveLoad: order.technicalSpec?.laminationAdhesiveLoad?.toString() || '',
+              laminationObservations: order.technicalSpec?.laminationObservations || ''
             },
             colorOrders: order.colorOrders?.length > 0
               ? order.colorOrders.map((c: any) => ({
@@ -152,6 +170,56 @@ export const OrderForm: React.FC = () => {
 
     fetchData();
   }, [id, isEditing, user?.id]);
+
+  useEffect(() => {
+    const derivedMeasure = formData.products
+      .map(p => products.find(prod => prod.id.toString() === p.productId)?.name)
+      .filter(Boolean)
+      .join(' / ');
+
+    let derivedMeters = formData.products.reduce((acc, p) => acc + (parseFloat(p.plannedQty) || 0), 0);
+
+    setFormData(prev => {
+      const newMeters = derivedMeters ? derivedMeters.toString() : '';
+      const refiladoDePie = Boolean(prev.technicalSpec.pie);
+      const refiladoDeCabeza = Boolean(prev.technicalSpec.cabeza);
+      const refiladoExitSense = refiladoDePie ? 'De pie' : refiladoDeCabeza ? 'De cabeza' : '';
+      const refiladoTacaRight = prev.technicalSpec.tacaRight ? 'Derecha' : '';
+      const refiladoTacaLeft = prev.technicalSpec.tacaLeft ? 'Izquierda' : '';
+
+      if (
+        prev.technicalSpec.materialMeasure === derivedMeasure &&
+        prev.technicalSpec.meters === newMeters &&
+        prev.technicalSpec.refiladoDePie === refiladoDePie &&
+        prev.technicalSpec.refiladoDeCabeza === refiladoDeCabeza &&
+        prev.technicalSpec.refiladoExitSense === refiladoExitSense &&
+        prev.technicalSpec.refiladoTacaRight === refiladoTacaRight &&
+        prev.technicalSpec.refiladoTacaLeft === refiladoTacaLeft
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        technicalSpec: {
+          ...prev.technicalSpec,
+          materialMeasure: derivedMeasure,
+          meters: newMeters,
+          refiladoDePie,
+          refiladoDeCabeza,
+          refiladoExitSense,
+          refiladoTacaRight,
+          refiladoTacaLeft
+        }
+      };
+    });
+  }, [
+    formData.products,
+    products,
+    formData.technicalSpec.pie,
+    formData.technicalSpec.cabeza,
+    formData.technicalSpec.tacaRight,
+    formData.technicalSpec.tacaLeft
+  ]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const target = e.target;
@@ -182,7 +250,7 @@ export const OrderForm: React.FC = () => {
   const addProductRow = () => {
     setFormData((prev) => ({
       ...prev,
-      products: [...prev.products, { productId: '', plannedQty: '' }]
+      products: [...prev.products, { productId: '', plannedQty: '', materialType: '' }]
     }));
   };
 
@@ -416,7 +484,7 @@ export const OrderForm: React.FC = () => {
         <div style={{ gridColumn: 'span 2' }}>
           <h4 style={{ marginBottom: '1rem', color: 'var(--text-muted)' }}>Productos de la Orden</h4>
           {formData.products.map((productRow, index) => (
-            <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', marginBottom: '1rem' }}>
+            <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '1rem', marginBottom: '1rem' }}>
               <div>
                 <label className="label">Medida del material</label>
                 <select
@@ -441,6 +509,20 @@ export const OrderForm: React.FC = () => {
                   placeholder="Ej: 1200 m / 6000 un"
                   required
                 />
+              </div>
+              <div>
+                <label className="label">Tipo de material</label>
+                <select
+                  value={productRow.materialType || ''}
+                  onChange={(e) => handleProductChange(index, 'materialType', e.target.value)}
+                  className="input"
+                >
+                  <option value="">Sin especificar</option>
+                  <option value="Cristal">Cristal</option>
+                  <option value="Metalizado">Metalizado</option>
+                  <option value="Perlado">Perlado</option>
+                  <option value="Mate">Mate</option>
+                </select>
               </div>
               {formData.products.length > 1 && (
                 <div style={{ display: 'flex', alignItems: 'flex-end' }}>
@@ -484,8 +566,8 @@ export const OrderForm: React.FC = () => {
 
       <FormSection title="Especificacion Tecnica" icon={<Ruler size={24} />}>
         <div>
-          <label className="label">Medida Material</label>
-          <input name="technicalSpec.materialMeasure" value={formData.technicalSpec.materialMeasure} onChange={handleInputChange} type="text" className="input" placeholder="Ej: 16/40" />
+          <label className="label">Medida Material (Derivada)</label>
+          <input name="technicalSpec.materialMeasure" value={formData.technicalSpec.materialMeasure} type="text" className="input" readOnly style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }} />
         </div>
         <div>
           <label className="label">Corte</label>
@@ -496,8 +578,8 @@ export const OrderForm: React.FC = () => {
           <input name="technicalSpec.lamina" value={formData.technicalSpec.lamina} onChange={handleInputChange} type="text" className="input" placeholder="Ej: Polipropileno" />
         </div>
         <div>
-          <label className="label">Metros Totales a Imprimir</label>
-          <input name="technicalSpec.meters" value={formData.technicalSpec.meters} onChange={handleInputChange} type="number" className="input" placeholder="1200" />
+          <label className="label">Metros Totales a Imprimir (Derivados)</label>
+          <input name="technicalSpec.meters" value={formData.technicalSpec.meters} type="text" className="input" readOnly style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }} />
         </div>
         <div>
           <fieldset className="technical-choice-group">
@@ -529,10 +611,6 @@ export const OrderForm: React.FC = () => {
             <option value="Directa">Directa</option>
             <option value="Retroverso">Retroverso</option>
           </select>
-        </div>
-        <div>
-          <label className="label">Sentido de salida impresion</label>
-          <input name="technicalSpec.printingExitSense" value={formData.technicalSpec.printingExitSense} onChange={handleInputChange} type="text" className="input" placeholder="Ej: Cliente hacia arriba" />
         </div>
         <div>
           <label className="label">Diametro bobina impresion</label>
@@ -604,16 +682,16 @@ export const OrderForm: React.FC = () => {
           <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.85rem' }}>Refiladora corte</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem' }}>
             <div>
-              <label className="label">Sentido de salida</label>
-              <input name="technicalSpec.refiladoExitSense" value={formData.technicalSpec.refiladoExitSense} onChange={handleInputChange} type="text" className="input" />
+              <label className="label">Sentido de salida (Derivado)</label>
+              <input name="technicalSpec.refiladoExitSense" value={formData.technicalSpec.refiladoExitSense} type="text" className="input" readOnly style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }} />
             </div>
             <div>
-              <label className="label">Taca derecha</label>
-              <input name="technicalSpec.refiladoTacaRight" value={formData.technicalSpec.refiladoTacaRight} onChange={handleInputChange} type="text" className="input" />
+              <label className="label">Taca derecha (Derivada)</label>
+              <input name="technicalSpec.refiladoTacaRight" value={formData.technicalSpec.refiladoTacaRight} type="text" className="input" readOnly style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }} />
             </div>
             <div>
-              <label className="label">Taca izquierda</label>
-              <input name="technicalSpec.refiladoTacaLeft" value={formData.technicalSpec.refiladoTacaLeft} onChange={handleInputChange} type="text" className="input" />
+              <label className="label">Taca izquierda (Derivada)</label>
+              <input name="technicalSpec.refiladoTacaLeft" value={formData.technicalSpec.refiladoTacaLeft} type="text" className="input" readOnly style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }} />
             </div>
             <div>
               <label className="label">Ancho de espira</label>
@@ -627,16 +705,6 @@ export const OrderForm: React.FC = () => {
               <label className="label">Metros</label>
               <input name="technicalSpec.refiladoMeters" value={formData.technicalSpec.refiladoMeters} onChange={handleInputChange} type="number" className="input" />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <input type="checkbox" name="technicalSpec.refiladoDePie" checked={formData.technicalSpec.refiladoDePie} onChange={handleInputChange} />
-                De pie
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <input type="checkbox" name="technicalSpec.refiladoDeCabeza" checked={formData.technicalSpec.refiladoDeCabeza} onChange={handleInputChange} />
-                De cabeza
-              </label>
-            </div>
           </div>
         </div>
         <div style={{ gridColumn: 'span 2' }}>
@@ -644,6 +712,51 @@ export const OrderForm: React.FC = () => {
           <textarea
             name="technicalSpec.techObservations"
             value={formData.technicalSpec.techObservations}
+            onChange={handleInputChange}
+            className="input"
+            style={{ height: '90px' }}
+          />
+        </div>
+      </FormSection>
+
+      <FormSection title="Laminacion" icon={<FlaskConical size={24} />}>
+        <div>
+          <label className="label">Material o Estructura</label>
+          <input name="technicalSpec.laminationStructure" value={formData.technicalSpec.laminationStructure} onChange={handleInputChange} type="text" className="input" />
+        </div>
+        <div>
+          <label className="label">Adhesivo</label>
+          <input name="technicalSpec.laminationAdhesive" value={formData.technicalSpec.laminationAdhesive} onChange={handleInputChange} type="text" className="input" />
+        </div>
+        <div>
+          <label className="label">Reticulante</label>
+          <input name="technicalSpec.laminationReticulant" value={formData.technicalSpec.laminationReticulant} onChange={handleInputChange} type="text" className="input" />
+        </div>
+        <div>
+          <label className="label">Diluyente</label>
+          <input name="technicalSpec.laminationDiluent" value={formData.technicalSpec.laminationDiluent} onChange={handleInputChange} type="text" className="input" />
+        </div>
+        <div>
+          <label className="label">Viscosidad</label>
+          <input name="technicalSpec.laminationViscosity" value={formData.technicalSpec.laminationViscosity} onChange={handleInputChange} type="number" step="0.01" className="input" />
+        </div>
+        <div>
+          <label className="label">Temperatura de túnel (°C)</label>
+          <input name="technicalSpec.laminationOvenTemp" value={formData.technicalSpec.laminationOvenTemp} onChange={handleInputChange} type="number" step="0.1" className="input" />
+        </div>
+        <div>
+          <label className="label">Temperatura de calandra (°C)</label>
+          <input name="technicalSpec.laminationCalenderTemp" value={formData.technicalSpec.laminationCalenderTemp} onChange={handleInputChange} type="number" step="0.1" className="input" />
+        </div>
+        <div>
+          <label className="label">Carga de adhesivo</label>
+          <input name="technicalSpec.laminationAdhesiveLoad" value={formData.technicalSpec.laminationAdhesiveLoad} onChange={handleInputChange} type="number" step="0.001" className="input" />
+        </div>
+        <div style={{ gridColumn: 'span 2' }}>
+          <label className="label">Observaciones de Laminación</label>
+          <textarea
+            name="technicalSpec.laminationObservations"
+            value={formData.technicalSpec.laminationObservations}
             onChange={handleInputChange}
             className="input"
             style={{ height: '90px' }}
