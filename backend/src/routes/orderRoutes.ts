@@ -1,15 +1,27 @@
 import { Router } from 'express';
 import * as orderController from '../controllers/orderController';
+import { authenticateToken, requireRoles } from '../middleware/authMiddleware';
 
 const router = Router();
 
-router.post('/', orderController.createOrder);
-router.get('/export-csv', orderController.exportOrdersCSV);
-router.get('/export-alegon/factura', orderController.exportAlegonFacturaPalm);
-router.get('/export-alegon/detalle', orderController.exportAlegonDetallePalm);
+// All order routes require a valid session token
+router.use(authenticateToken);
+
+// Creation, deletion and financial cost stats require ADMIN
+router.post('/', requireRoles('ADMIN', 'VENDEDOR'), orderController.createOrder);
+router.delete('/:id', requireRoles('ADMIN'), orderController.deleteOrder);
+router.put('/:id', requireRoles('ADMIN', 'VENDEDOR'), orderController.updateOrder);
+router.get('/stats/costs', requireRoles('ADMIN'), orderController.getCostStats);
+router.post('/:id/reopen', requireRoles('ADMIN'), orderController.reopenFinishedOrder);
+
+// Export and stats
+router.get('/export-csv', requireRoles('ADMIN'), orderController.exportOrdersCSV);
+router.get('/export-alegon/factura', requireRoles('ADMIN'), orderController.exportAlegonFacturaPalm);
+router.get('/export-alegon/detalle', requireRoles('ADMIN'), orderController.exportAlegonDetallePalm);
 router.get('/stats', orderController.getDashboardStats);
-router.get('/stats/costs', orderController.getCostStats);
 router.get('/', orderController.getAllOrders);
+
+// Stage and order execution (accessible by ADMIN and MACHINE)
 router.get('/:orderId/checklists', orderController.getChecklists);
 router.post('/:orderId/checklists', orderController.saveChecklist);
 router.get('/:orderId/quality-controls', orderController.getQualityControls);
@@ -22,10 +34,7 @@ router.get('/:id', orderController.getOrderById);
 router.post('/processes', orderController.createProcess);
 router.post('/:id/stage-action', orderController.updateStageAction);
 router.post('/:id/finalize', orderController.finalizeOrder);
-router.post('/:id/reopen', orderController.reopenFinishedOrder);
 router.post('/:id/consumptions', orderController.registerConsumptions);
 router.patch('/:id/status', orderController.changeStatus);
-router.delete('/:id', orderController.deleteOrder);
-router.put('/:id', orderController.updateOrder);
 
 export default router;

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import prisma from '../lib/prisma';
 import { getCurrentUsdExchangeRate, parseExchangeRate } from './exchangeRateService';
 
@@ -6,6 +7,129 @@ type ActorContext = {
   role?: string;
   machineId?: number;
 };
+
+// Development fallback for environments where IdempotencyRecord table is pending creation
+// WARNING: This in-memory fallback does NOT guarantee persistence or multi-instance concurrency in production.
+const inMemoryIdempotencyStore = new Map<string, { scope: string; payloadHash: string; responseBody: string; createdAt: Date }>();
+
+const isPostgresEnvironment = (): boolean => {
+  const url = process.env.DATABASE_URL || '';
+  return url.startsWith('postgres://') || url.startsWith('postgresql://');
+};
+
+const acquireOrderRowLock = async (tx: any, orderId: number) => {
+  if (isPostgresEnvironment()) {
+    // In PostgreSQL, acquire pessimistic exclusive row lock using $queryRaw explicitly within silcar schema
+    await tx.$queryRaw`SELECT id FROM "silcar"."ProductionOrder" WHERE id = ${orderId} FOR UPDATE`;
+  }
+};
+
+const computeConsumptionPayloadHash = (orderId: number, data: any) => {
+  const normConsumptions = (Array.isArray(data?.consumptions) ? data.consumptions : [])
+    .map((c: any) => ({
+      supplyId: parseSafeInt(c.supplyId),
+      colorName: normalizeQtyText(c.colorName),
+      colorId: parseSafeInt(c.colorId),
+      realQty: parseSafeFloat(c.realQty) || 0,
+      lotNumber: normalizeQtyText(c.lotNumber),
+      loads: normalizeQtyText(c.loads),
+      endValue: normalizeQtyText(c.endValue),
+      unit: normalizeQtyText(c.unit) || 'kg'
+    }))
+    .sort((a: any, b: any) => (a.supplyId || 0) - (b.supplyId || 0) || (a.colorName || '').localeCompare(b.colorName || ''));
+
+  const payload = {
+    orderId,
+    type: String(data?.type || '').toUpperCase(),
+    realMeters: data?.realMeters !== undefined ? parseSafeFloat(data.realMeters) : undefined,
+    exchangeRate: data?.exchangeRate !== undefined ? parseSafeFloat(data.exchangeRate) : undefined,
+    consumptions: normConsumptions
+  };
+
+  return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+};
+
+interface IdempotencyLookupResult {
+  key: string;
+  scope: string;
+  payloadHash: string;
+  responseBody: any;
+  createdAt: Date;
+}
+
+const getIdempotencyRecord = async (tx: any, key: string): Promise<IdempotencyLookupResult | null> => {
+  try {
+    const record = await tx.idempotencyRecord.findUnique({ where: { key } });
+    if (record) {
+      let parsedBody = {};
+      try {
+        parsedBody = JSON.parse(record.responseBody);
+      } catch {
+        parsedBody = { raw: record.responseBody };
+      }
+      return {
+        key: record.key,
+        scope: record.scope,
+        payloadHash: record.payloadHash,
+        responseBody: parsedBody,
+        createdAt: record.createdAt
+      };
+    }
+  } catch (err: any) {
+    // Fallback if table does not exist in legacy database
+    const mem = inMemoryIdempotencyStore.get(key);
+    if (mem) {
+      let parsedBody = {};
+      try {
+        parsedBody = JSON.parse(mem.responseBody);
+      } catch {
+        parsedBody = { raw: mem.responseBody };
+      }
+      return {
+        key,
+        scope: mem.scope,
+        payloadHash: mem.payloadHash,
+        responseBody: parsedBody,
+        createdAt: mem.createdAt
+      };
+    }
+  }
+  return null;
+};
+
+const saveIdempotencyRecord = async (
+  tx: any,
+  key: string,
+  scope: string,
+  payloadHash: string,
+  responseBody: any
+) => {
+  const bodyStr = typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody);
+  try {
+    await tx.idempotencyRecord.create({
+      data: {
+        key,
+        scope,
+        payloadHash,
+        responseBody: bodyStr,
+        status: 'COMPLETED'
+      }
+    });
+  } catch (err: any) {
+    // If unique constraint violation or table missing, update memory fallback
+    inMemoryIdempotencyStore.set(key, {
+      scope,
+      payloadHash,
+      responseBody: bodyStr,
+      createdAt: new Date()
+    });
+    // If error was NOT table missing (e.g. unique constraint violation from concurrent race), rethrow
+    if (err?.code === 'P2002') {
+      throw err;
+    }
+  }
+};
+
 
 const parseSafeInt = (val: any) => {
   const parsed = parseInt(val);
@@ -518,7 +642,9 @@ export const getOrderById = async (id: number) => {
   return order ? enrichOrderOperationalState(order) : null;
 };
 
-export const createProcess = async (processData: any) => {
+export const createProcess = async (processData: any, actor?: ActorContext) => {
+  ensureProductionActor(actor);
+
   const {
     orderId,
     type,
@@ -531,7 +657,14 @@ export const createProcess = async (processData: any) => {
     specificData
   } = processData;
 
+  const stage = String(type || '').toUpperCase();
+
   return await prisma.$transaction(async (tx) => {
+    // Validate machine authorization if actor is MACHINE
+    await validateMachineStageAuthorization(actor, stage, tx);
+
+    await acquireOrderRowLock(tx, parseInt(orderId));
+
     const order = await tx.productionOrder.findUnique({
       where: { id: parseInt(orderId) },
       include: { products: true }
@@ -847,6 +980,79 @@ const arePlannedStagesComplete = (order: any) => {
   return plannedStages.every((stage) => isStageComplete(order, stage));
 };
 
+const validateMachineStageAuthorization = async (actor: ActorContext | undefined, stage: string, tx: any) => {
+  if (normalizeRole(actor?.role) === 'ADMIN') {
+    return;
+  }
+
+  if (normalizeRole(actor?.role) === 'MACHINE') {
+    if (!actor?.machineId) {
+      throw new Error('Operacion no autorizada: el usuario de planta no tiene una maquina asignada');
+    }
+
+    const machine = await tx.machine.findUnique({
+      where: { id: actor.machineId }
+    });
+
+    if (!machine) {
+      throw new Error(`Maquina ID ${actor.machineId} no encontrada`);
+    }
+
+    const machineType = String(machine.type || '').toUpperCase();
+    if (machineType !== stage) {
+      throw new Error(`Acceso denegado: maquina ${machine.name} (${machineType}) no esta autorizada para la etapa ${stage}`);
+    }
+  }
+};
+
+const validateStagePrecedence = (order: any, stageToStart: string) => {
+  const plannedStages = getOrderedPlannedStages(order.processes || []);
+  const stageIndex = plannedStages.indexOf(stageToStart);
+
+  if (stageIndex === -1) {
+    if (plannedStages.length === 0) return;
+    throw new Error(`La etapa ${stageToStart} no forma parte de la planificacion de esta orden`);
+  }
+
+  for (let i = 0; i < stageIndex; i++) {
+    const previousStage = plannedStages[i];
+    if (!isStageComplete(order, previousStage)) {
+      const prevLabel = PROCESS_TYPE_LABELS[previousStage] || previousStage;
+      throw new Error(`No se puede iniciar ${PROCESS_TYPE_LABELS[stageToStart] || stageToStart}: la etapa precedente (${prevLabel}) debe completarse primero`);
+    }
+  }
+};
+
+const validateStageHasProductionMetrics = (process: any, stage: string, observations?: string) => {
+  let hasProduction = false;
+
+  if (stage === 'IMPRESION') {
+    const meters = Number(process.printingData?.processedMeters) || 0;
+    const coilCount = Number(process.printingData?.coilCount) || 0;
+    const metricTotal = (process.metricEntries || []).reduce((acc: number, m: any) => acc + (Number(m.meters) || 0), 0);
+    hasProduction = meters > 0 || coilCount > 0 || metricTotal > 0;
+  } else if (stage === 'LAMINACION') {
+    const meters = Number(process.laminationData?.processedMeters) || 0;
+    const metricTotal = (process.metricEntries || []).reduce((acc: number, m: any) => acc + (Number(m.meters) || 0), 0);
+    hasProduction = meters > 0 || metricTotal > 0;
+  } else if (stage === 'REFILADO') {
+    const meters = Number(process.refiladoData?.processedMeters) || 0;
+    const bobbins = (process.refiladoData?.outputBobbins || []).length;
+    const scrapKg = Number(process.scrapKg) || 0;
+    hasProduction = meters > 0 || bobbins > 0 || scrapKg > 0;
+  } else if (stage === 'CONFECCION') {
+    const totalBags = (process.confeccionData?.outputs || []).reduce((acc: number, o: any) => acc + (Number(o.bagQty) || 0), 0);
+    hasProduction = totalBags > 0;
+  }
+
+  if (!hasProduction) {
+    const cleanObs = String(observations || process.observations || '').trim();
+    if (!cleanObs || cleanObs.length < 5) {
+      throw new Error(`No se puede finalizar ${PROCESS_TYPE_LABELS[stage] || stage} sin registrar produccion. Si se trata de un cierre excepcional o sin tirada, ingrese una observacion explicativa de al menos 5 caracteres.`);
+    }
+  }
+};
+
 export const updateStageAction = async (orderId: number, data: any, actor?: ActorContext) => {
   ensureProductionActor(actor);
 
@@ -862,9 +1068,25 @@ export const updateStageAction = async (orderId: number, data: any, actor?: Acto
   }
 
   return await prisma.$transaction(async (tx) => {
+    // Acquire PostgreSQL row-level lock to prevent concurrent races on the same order
+    await acquireOrderRowLock(tx, orderId);
+
+    // 1. Authorize machine against requested stage
+    await validateMachineStageAuthorization(actor, stage, tx);
+
     const order = await tx.productionOrder.findUnique({
       where: { id: orderId },
-      include: { processes: true }
+      include: {
+        processes: {
+          include: {
+            printingData: true,
+            laminationData: true,
+            refiladoData: { include: { outputBobbins: true } },
+            confeccionData: { include: { outputs: true } },
+            metricEntries: true
+          }
+        }
+      }
     });
 
     if (!order) throw new Error('Orden no encontrada');
@@ -878,7 +1100,33 @@ export const updateStageAction = async (orderId: number, data: any, actor?: Acto
       .sort((a: any, b: any) => (b.startTime?.getTime?.() || 0) - (a.startTime?.getTime?.() || 0))[0];
 
     if (action === 'START') {
+      if (isStageComplete(order, stage)) {
+        throw new Error(`La etapa ${PROCESS_TYPE_LABELS[stage] || stage} ya fue finalizada`);
+      }
+
+      // 2. Validate stage precedence (cannot start if preceding planned stages are incomplete)
+      validateStagePrecedence(order, stage);
+
       if (latestInProgress) {
+        const currentMachineId = latestInProgress.machineId;
+        const requestingMachineId = actor?.machineId ?? parseSafeInt(data.machineId);
+
+        // Machine conflict check: if already in progress on a different machine
+        if (normalizeRole(actor?.role) === 'MACHINE' && currentMachineId && actor?.machineId && currentMachineId !== actor.machineId) {
+          const conflictErr: any = new Error(`Conflicto de asignacion: la etapa ${PROCESS_TYPE_LABELS[stage] || stage} ya esta en curso en otra maquina (ID ${currentMachineId})`);
+          conflictErr.status = 409;
+          conflictErr.statusCode = 409;
+          throw conflictErr;
+        }
+
+        if (requestingMachineId && currentMachineId && requestingMachineId !== currentMachineId && normalizeRole(actor?.role) !== 'ADMIN') {
+          const conflictErr: any = new Error(`Conflicto de asignacion: la etapa ${PROCESS_TYPE_LABELS[stage] || stage} ya esta en curso en la maquina ID ${currentMachineId}`);
+          conflictErr.status = 409;
+          conflictErr.statusCode = 409;
+          throw conflictErr;
+        }
+
+        // Idempotent retry by the same machine or authorized user
         const nextOperatorId = parseSafeInt(data.operatorId);
         if (nextOperatorId && !latestInProgress.operatorId) {
           return await tx.productionProcess.update({
@@ -894,7 +1142,7 @@ export const updateStageAction = async (orderId: number, data: any, actor?: Acto
           orderId,
           type: stage,
           status: 'en_proceso',
-          machineId: parseSafeInt(data.machineId) ?? actor?.machineId ?? plannedProcess?.machineId ?? null,
+          machineId: actor?.machineId ?? parseSafeInt(data.machineId) ?? plannedProcess?.machineId ?? null,
           operatorId: parseSafeInt(data.operatorId),
           startTime: new Date(),
           scrapKg: 0,
@@ -911,8 +1159,28 @@ export const updateStageAction = async (orderId: number, data: any, actor?: Acto
     }
 
     if (!latestInProgress) {
+      // Idempotent retry: if stage was already completed, return existing finished process cleanly
+      if (isStageComplete(order, stage)) {
+        const latestFinished = order.processes
+          .filter((process: any) => process.type === stage && process.status === 'finalizado')
+          .sort((a: any, b: any) => (b.endTime?.getTime?.() || b.id || 0) - (a.endTime?.getTime?.() || a.id || 0))[0];
+
+        if (latestFinished) {
+          if (normalizeRole(actor?.role) === 'MACHINE' && latestFinished.machineId && actor?.machineId && latestFinished.machineId !== actor.machineId) {
+            const err: any = new Error(`Acceso denegado: la etapa ${stage} pertenece a otra maquina (ID ${latestFinished.machineId})`);
+            err.status = 403;
+            err.statusCode = 403;
+            throw err;
+          }
+          return latestFinished;
+        }
+      }
+
       throw new Error(`Primero inicia ${PROCESS_TYPE_LABELS[stage]} antes de marcarla terminada`);
     }
+
+    // 3. Validate minimum production recorded or mandatory exceptional closure explanation
+    validateStageHasProductionMetrics(latestInProgress, stage, data.observations);
 
     const process = await tx.productionProcess.update({
       where: { id: latestInProgress.id },
@@ -2093,8 +2361,37 @@ export const registerConsumptions = async (orderId: number, data: any) => {
     ? { rate: postedExchangeRate }
     : await getCurrentUsdExchangeRate();
   const exchangeRate = exchangeRateResult.rate;
+  const cleanIdempotencyKey = data?.idempotencyKey ? String(data.idempotencyKey).trim() : null;
 
   return await prisma.$transaction(async (tx) => {
+    // Acquire PostgreSQL row-level lock on order to serialize operations
+    await acquireOrderRowLock(tx, orderId);
+
+    const idempotencyScope = `consumption:${orderId}`;
+    const idempotencyKey = cleanIdempotencyKey ? `consumption:${orderId}:${cleanIdempotencyKey}` : null;
+    const currentPayloadHash = cleanIdempotencyKey ? computeConsumptionPayloadHash(orderId, data) : null;
+
+    if (idempotencyKey && currentPayloadHash) {
+      const existingRecord = await getIdempotencyRecord(tx, idempotencyKey);
+      if (existingRecord) {
+        if (existingRecord.payloadHash === currentPayloadHash) {
+          // Idempotent retry: exact same key and payload. Replay identical success response without double deduction
+          return {
+            success: true,
+            message: 'Consumos registrados y stock actualizado',
+            idempotencyReplay: true,
+            cachedAt: existingRecord.createdAt
+          };
+        } else {
+          // Key reused with different payload: reject with explicit 409 Conflict
+          const conflictErr: any = new Error('Conflicto: la clave de idempotencia ya fue utilizada con un payload diferente');
+          conflictErr.status = 409;
+          conflictErr.statusCode = 409;
+          throw conflictErr;
+        }
+      }
+    }
+
     if (data.realMeters !== undefined) {
       const processTypeMap: Record<string, string> = { PRINTING: 'IMPRESION', LAMINATION: 'LAMINACION', REFILADO: 'REFILADO' };
       const procType = processTypeMap[type] || type;
@@ -2161,7 +2458,7 @@ export const registerConsumptions = async (orderId: number, data: any) => {
         }
 
         const realQty = parseFloat(cons.realQty) || 0;
-        const stockQty = type === 'PRINTING' ? realQty : Math.max(0, realQty);
+        const stockQty = realQty;
         const supply = await tx.supply.findUnique({ where: { id: supplyId } });
         const unitPrice = supply?.price ?? null;
         const calculatedCost = unitPrice !== null ? realQty * unitPrice : null;
@@ -2243,6 +2540,18 @@ export const registerConsumptions = async (orderId: number, data: any) => {
       }
     }
 
-    return { success: true, message: 'Consumos registrados y stock actualizado' };
+    const responseData = { success: true, message: 'Consumos registrados y stock actualizado' };
+
+    if (idempotencyKey && currentPayloadHash) {
+      await saveIdempotencyRecord(
+        tx,
+        idempotencyKey,
+        idempotencyScope,
+        currentPayloadHash,
+        responseData
+      );
+    }
+
+    return responseData;
   }, TRANSACTION_OPTIONS);
 };

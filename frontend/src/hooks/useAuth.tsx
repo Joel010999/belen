@@ -6,6 +6,7 @@ interface User {
   username: string;
   name: string;
   role: AppRole;
+  token?: string;
   machine?: {
     id: number;
     code: string;

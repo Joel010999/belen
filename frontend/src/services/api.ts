@@ -1,10 +1,8 @@
 import axios from 'axios';
 import { normalizeRole } from '../utils/authRole';
 
-const productionApiUrl = 'https://belen-production-0486.up.railway.app/api';
-
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? productionApiUrl : 'http://localhost:3001/api')
+  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3001/api')
 });
 
 api.interceptors.request.use((config) => {
@@ -12,6 +10,9 @@ api.interceptors.request.use((config) => {
   if (savedUser) {
     try {
       const user = JSON.parse(savedUser);
+      if (user.token) {
+        config.headers['Authorization'] = `Bearer ${user.token}`;
+      }
       config.headers['x-user-id'] = user.id;
       config.headers['x-user-role'] = normalizeRole(user.role);
       if (user.machine?.id) {
@@ -25,5 +26,18 @@ api.interceptors.request.use((config) => {
 }, (error) => {
   return Promise.reject(error);
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('silcar_user');
+      if (window.location.pathname !== '/login' && !window.location.pathname.includes('login')) {
+        window.location.href = '/';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default api;

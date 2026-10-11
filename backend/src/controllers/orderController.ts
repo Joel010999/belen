@@ -48,7 +48,7 @@ export const getOrderById = async (req: Request, res: Response) => {
 
 export const createProcess = async (req: Request, res: Response) => {
   try {
-    const process = await orderService.createProcess(req.body);
+    const process = await orderService.createProcess(req.body, getActor(req));
     res.status(201).json(process);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -61,7 +61,8 @@ export const updateStageAction = async (req: Request, res: Response) => {
     const process = await orderService.updateStageAction(orderId, req.body, getActor(req));
     res.json(process);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const status = error.status || error.statusCode || (error.message?.includes('Conflicto') ? 409 : 400);
+    res.status(status).json({ error: error.message });
   }
 };
 
@@ -251,9 +252,14 @@ export const saveFinalInspection = async (req: Request, res: Response) => {
 export const registerConsumptions = async (req: Request, res: Response) => {
   try {
     const orderId = parseInt(req.params.id as string);
-    const result = await orderService.registerConsumptions(orderId, req.body);
+    const idempotencyKey = (req.headers['idempotency-key'] as string) || req.body?.idempotencyKey;
+    const result = await orderService.registerConsumptions(orderId, {
+      ...req.body,
+      idempotencyKey
+    });
     res.status(200).json(result);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const status = error.status || error.statusCode || (error.message?.includes('Conflicto') || error.message?.includes('idempotencia') ? 409 : 400);
+    res.status(status).json({ error: error.message });
   }
 };

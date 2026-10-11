@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "npx prisma generate && tsc",
-    "start": "npx prisma db push && node dist/index.js",
+    "start": "node dist/index.js",
+    "seed:silcar": "node prisma/seed_silcar_initial.js",
+    "db:push": "npx prisma db push",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

@@ -1,0 +1,23 @@
+services:
+  silcar-postgres:
+    image: postgres:16-alpine
+    container_name: silcar-postgres-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: silcar_dev
+      POSTGRES_PASSWORD: silcar_dev_secret
+      POSTGRES_DB: silcar_local
+    ports:
+      - "5432:5432"
+    volumes:
+      - silcar_pgdata:/var/lib/postgresql/data
+      - ./backend/prisma/postgresql_init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U silcar_dev -d silcar_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  silcar_pgdata:
+    driver: local

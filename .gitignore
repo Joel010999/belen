@@ -35,3 +35,13 @@ build/
 # OS files
 Thumbs.db
 Desktop.ini
+
+# Scratch and temporary scripts
+scratch/
+Monica_src/
+*.txt
+*.ps1
+append_test.js
+fix-whitespace.js
+patch-client.js
+replace.js

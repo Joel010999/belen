@@ -13,6 +13,7 @@ import { CostDashboard } from './pages/CostDashboard';
 import { OrderHistory } from './pages/OrderHistory';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import './index.css';
 
 const AppContent = () => {
@@ -29,13 +30,55 @@ const AppContent = () => {
             <Route path="/" element={<Dashboard />} />
             <Route path="/ordenes" element={<OrdersList />} />
             <Route path="/produccion" element={<ProductionProcess />} />
-            <Route path="/ordenes/nueva" element={<OrderForm />} />
-            <Route path="/ordenes/editar/:id" element={<OrderForm />} />
+            <Route
+              path="/ordenes/nueva"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'VENDEDOR']}>
+                  <OrderForm />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/ordenes/editar/:id"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'VENDEDOR']}>
+                  <OrderForm />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/ordenes/:id" element={<OrderDetail />} />
-            <Route path="/stock" element={<StockView />} />
-            <Route path="/transferencia" element={<ImportCSV />} />
-            <Route path="/auditoria" element={<AuditLogs />} />
-            <Route path="/costos" element={<CostDashboard />} />
+            <Route
+              path="/stock"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <StockView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/transferencia"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <ImportCSV />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/auditoria"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <AuditLogs />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/costos"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <CostDashboard />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/historial" element={<OrderHistory />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

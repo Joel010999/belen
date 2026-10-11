@@ -1,6 +1,35 @@
+import path from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: path.resolve(__dirname, '../../.env.local') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+dotenv.config({ path: path.resolve(process.cwd(), 'backend/.env.local') });
+dotenv.config();
+
 import { PrismaClient } from '@prisma/client';
 
-const basePrisma = new PrismaClient();
+function getSilcarDatabaseUrl(rawUrl: string): string {
+  if (!rawUrl) return '';
+  try {
+    const parsed = new URL(rawUrl);
+    if (!parsed.searchParams.has('schema')) {
+      parsed.searchParams.set('schema', 'silcar');
+    }
+    return parsed.toString();
+  } catch {
+    if (rawUrl.includes('schema=')) return rawUrl;
+    return rawUrl.includes('?') ? `${rawUrl}&schema=silcar` : `${rawUrl}?schema=silcar`;
+  }
+}
+
+const rawDbUrl = process.env.DATABASE_URL || '';
+const silcarDbUrl = getSilcarDatabaseUrl(rawDbUrl);
+
+const basePrisma = new PrismaClient({
+  datasources: {
+    db: { url: silcarDbUrl }
+  }
+});
 
 const prisma = basePrisma.$extends({
   query: {

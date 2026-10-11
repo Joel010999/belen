@@ -245,8 +245,19 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
       return;
     }
 
+    const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `cons_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
     try {
-      await api.post(`/orders/${order.id}/consumptions`, dataToSend);
+      await api.post(`/orders/${order.id}/consumptions`, {
+        ...dataToSend,
+        idempotencyKey
+      }, {
+        headers: {
+          'Idempotency-Key': idempotencyKey
+        }
+      });
       setSuccess(true);
       setPrintingColors(prev => prev.map(p => ({ ...p, loads: '', endValue: '', realQty: 0 })));
       setLaminationSupplies(prev => prev.map(p => ({ ...p, loads: '', endValue: '', realQty: 0 })));

@@ -7,7 +7,12 @@ import orderRoutes from './routes/orderRoutes';
 import authRoutes from './routes/authRoutes';
 import exportRoutes from './routes/exportRoutes';
 import { getCurrentUsdExchangeRate, saveManualUsdExchangeRate } from './services/exchangeRateService';
+import { authenticateToken, requireRoles } from './middleware/authMiddleware';
+import path from 'path';
 
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+dotenv.config({ path: path.resolve(process.cwd(), 'backend/.env.local') });
 dotenv.config();
 
 const app = express();
@@ -15,8 +20,21 @@ const app = express();
 
 const port = process.env.PORT || 3001;
 
-app.use(cors());
+// Configuración de CORS: En producción limita estrictamente a CORS_ORIGIN
+const allowedCorsOrigin = process.env.CORS_ORIGIN;
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' && allowedCorsOrigin
+    ? allowedCorsOrigin.split(',').map(o => o.trim())
+    : true,
+  credentials: true
+}));
+
 app.use(express.json());
+
+// Health check seguro: no expone credenciales, hosts ni detalles de base de datos
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', service: 'silcar-backend', timestamp: new Date().toISOString() });
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -24,14 +42,14 @@ app.use('/api/import', importRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/export', exportRoutes);
 
-// Master Data Routes
-app.get('/api/clients', async (req, res) => res.json(await prisma.client.findMany()));
-app.get('/api/products', async (req, res) => res.json(await prisma.product.findMany({ include: { stock: true } })));
-app.get('/api/machines', async (req, res) => res.json(await prisma.machine.findMany()));
-app.get('/api/operators', async (req, res) => res.json(await prisma.operator.findMany()));
-app.get('/api/supplies', async (req, res) => res.json(await prisma.supply.findMany({ include: { stock: true } })));
+// Master Data Routes (Authenticated users can read)
+app.get('/api/clients', authenticateToken, async (req, res) => res.json(await prisma.client.findMany()));
+app.get('/api/products', authenticateToken, async (req, res) => res.json(await prisma.product.findMany({ include: { stock: true } })));
+app.get('/api/machines', authenticateToken, async (req, res) => res.json(await prisma.machine.findMany()));
+app.get('/api/operators', authenticateToken, async (req, res) => res.json(await prisma.operator.findMany()));
+app.get('/api/supplies', authenticateToken, async (req, res) => res.json(await prisma.supply.findMany({ include: { stock: true } })));
 
-app.get('/api/exchange-rate/usd-official', async (req, res) => {
+app.get('/api/exchange-rate/usd-official', authenticateToken, async (req, res) => {
   try {
     res.json(await getCurrentUsdExchangeRate());
   } catch (e: any) {
@@ -39,20 +57,15 @@ app.get('/api/exchange-rate/usd-official', async (req, res) => {
   }
 });
 
-app.put('/api/exchange-rate/usd-official', async (req, res) => {
+app.put('/api/exchange-rate/usd-official', authenticateToken, requireRoles('ADMIN'), async (req, res) => {
   try {
-    const role = typeof req.headers['x-user-role'] === 'string' ? req.headers['x-user-role'].toUpperCase() : '';
-    if (role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Solo administracion puede fijar la cotizacion manual' });
-    }
-
     res.json(await saveManualUsdExchangeRate(req.body?.rate));
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }
 });
 
-app.put('/api/stock/config', async (req, res) => {
+app.put('/api/stock/config', authenticateToken, requireRoles('ADMIN'), async (req, res) => {
   const { productId, supplyId, itemType, unit, minStock } = req.body;
   try {
     const updated = await prisma.currentStock.upsert({
@@ -73,14 +86,9 @@ app.put('/api/stock/config', async (req, res) => {
   }
 });
 
-app.put('/api/stock/price', async (req, res) => {
+app.put('/api/stock/price', authenticateToken, requireRoles('ADMIN'), async (req, res) => {
   const { productId, supplyId, price } = req.body;
   try {
-    const role = typeof req.headers['x-user-role'] === 'string' ? req.headers['x-user-role'].toUpperCase() : '';
-    if (role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Solo administracion puede modificar precios' });
-    }
-
     const parsedPrice = price === '' || price === null || price === undefined
       ? null
       : parseFloat(String(price).replace(',', '.'));
@@ -109,7 +117,7 @@ app.put('/api/stock/price', async (req, res) => {
   }
 });
 
-app.get('/api/audit', async (req, res) => {
+app.get('/api/audit', authenticateToken, requireRoles('ADMIN'), async (req, res) => {
   try {
     const logs = await prisma.systemAuditLog.findMany({
       orderBy: { date: 'desc' },
@@ -121,7 +129,7 @@ app.get('/api/audit', async (req, res) => {
   }
 });
 
-app.get('/api/audit/export', async (req, res) => {
+app.get('/api/audit/export', authenticateToken, requireRoles('ADMIN'), async (req, res) => {
   try {
     const logs = await prisma.systemAuditLog.findMany({
       orderBy: { date: 'desc' }
@@ -145,7 +153,7 @@ app.get('/api/audit/export', async (req, res) => {
   }
 });
 
-app.delete('/api/audit', async (req, res) => {
+app.delete('/api/audit', authenticateToken, requireRoles('ADMIN'), async (req, res) => {
   try {
     await prisma.systemAuditLog.deleteMany({});
     res.json({ message: 'Historial de auditoría vaciado' });

@@ -586,3 +586,17 @@ model SystemAuditLog {
   entity  String // e.g. "ProductionOrder", "User", "CurrentStock"
   details String?  @db.Text // JSON string or descriptive text with payload/changes
 }
+
+model IdempotencyRecord {
+  id           Int      @id @default(autoincrement())
+  key          String   @unique
+  scope        String
+  payloadHash  String
+  responseBody String   @db.Text
+  status       String   @default("COMPLETED")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([scope])
+}
+
