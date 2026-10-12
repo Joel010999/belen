@@ -44,6 +44,40 @@ app.use('/api/export', exportRoutes);
 
 // Master Data Routes (Authenticated users can read)
 app.get('/api/clients', authenticateToken, async (req, res) => res.json(await prisma.client.findMany()));
+
+// Ficha Tecnica por Cliente (Persistencia mediante SystemSetting aislada)
+app.get('/api/clients/:id/technical-sheet', authenticateToken, async (req, res) => {
+  const clientId = parseInt(String(req.params.id));
+  if (isNaN(clientId)) return res.status(400).json({ error: 'ID de cliente inválido' });
+  try {
+    const key = `client_technical_sheet_${clientId}`;
+    const setting = await prisma.systemSetting.findUnique({ where: { key } });
+    if (!setting) {
+      return res.json({ clientId, content: '', updatedAt: null });
+    }
+    const parsed = JSON.parse(setting.value);
+    res.json({ clientId, content: parsed.content || '', updatedAt: setting.updatedAt });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/clients/:id/technical-sheet', authenticateToken, requireRoles('ADMIN', 'VENDEDOR'), async (req, res) => {
+  const clientId = parseInt(String(req.params.id));
+  if (isNaN(clientId)) return res.status(400).json({ error: 'ID de cliente inválido' });
+  const { content } = req.body;
+  try {
+    const key = `client_technical_sheet_${clientId}`;
+    const setting = await prisma.systemSetting.upsert({
+      where: { key },
+      update: { value: JSON.stringify({ content: String(content || '') }) },
+      create: { key, value: JSON.stringify({ content: String(content || '') }) }
+    });
+    res.json({ clientId, content: String(content || ''), updatedAt: setting.updatedAt });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.get('/api/products', authenticateToken, async (req, res) => res.json(await prisma.product.findMany({ include: { stock: true } })));
 app.get('/api/machines', authenticateToken, async (req, res) => res.json(await prisma.machine.findMany()));
 app.get('/api/operators', authenticateToken, async (req, res) => res.json(await prisma.operator.findMany()));

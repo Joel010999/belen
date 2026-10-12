@@ -148,6 +148,10 @@ export const OrderDetail: React.FC = () => {
     inspectorName: '',
     items: [createFinishedControlItem()]
   });
+  const [clientTechnicalSheet, setClientTechnicalSheet] = useState('');
+  const [loadingSheet, setLoadingSheet] = useState(false);
+  const [savingSheet, setSavingSheet] = useState(false);
+  const [showSheetModal, setShowSheetModal] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -155,6 +159,14 @@ export const OrderDetail: React.FC = () => {
       try {
         const orderRes = await api.get(`/orders/${id}`);
         setOrder(orderRes.data);
+        if (orderRes.data?.clientId) {
+          try {
+            const sheetRes = await api.get(`/clients/${orderRes.data.clientId}/technical-sheet`);
+            setClientTechnicalSheet(sheetRes.data?.content || '');
+          } catch (e) {
+            console.error('Error fetching client technical sheet:', e);
+          }
+        }
       } catch (err) {
         console.error('Error fetching order data:', err);
       } finally {
@@ -163,6 +175,21 @@ export const OrderDetail: React.FC = () => {
     };
     fetchData();
   }, [id]);
+
+  const saveClientTechnicalSheet = async () => {
+    if (!order?.clientId) return;
+    setSavingSheet(true);
+    try {
+      await api.put(`/clients/${order.clientId}/technical-sheet`, { content: clientTechnicalSheet });
+      alert('Ficha técnica del cliente guardada correctamente.');
+      setShowSheetModal(false);
+    } catch (err) {
+      console.error('Error guardando ficha técnica:', err);
+      alert('Error al guardar la ficha técnica del cliente');
+    } finally {
+      setSavingSheet(false);
+    }
+  };
 
   const refreshOrder = async () => {
     try {
@@ -188,7 +215,36 @@ export const OrderDetail: React.FC = () => {
       return;
     }
 
-    setChecklistItems(getChecklistTemplate(stage));
+    const template = getChecklistTemplate(stage).map(item => {
+      const copy = { ...item };
+      // Reutilizar datos ya definidos en la orden
+      if (stage === 'LAMINACION') {
+        if (copy.controlName === 'Carga' && order?.technicalSpec?.laminationAdhesiveLoad) {
+          copy.value = `${order.technicalSpec.laminationAdhesiveLoad} g/m²`;
+        }
+        if (copy.controlName === 'Tipo material') {
+          const mat = order?.products?.map((p: any) => p.materialType).filter(Boolean).join(', ') || order?.technicalSpec?.laminationStructure || order?.technicalSpec?.lamina;
+          if (mat) copy.value = mat;
+        }
+        if (copy.controlName === 'Ancho' && order?.technicalSpec?.materialMeasure) {
+          copy.value = order.technicalSpec.materialMeasure;
+        }
+      } else if (stage === 'REFILADO') {
+        if (copy.controlName === 'Sentido de salida' && order?.technicalSpec?.refiladoExitSense) {
+          copy.value = order.technicalSpec.refiladoExitSense;
+        }
+        if (copy.controlName === 'Taca der-izq') {
+          const taca = order?.technicalSpec?.refiladoTacaRight || order?.technicalSpec?.refiladoTacaLeft;
+          if (taca) copy.value = taca;
+        }
+        if (copy.controlName === 'Ancho espira' && order?.technicalSpec?.refiladoAnchoEspira) {
+          copy.value = order.technicalSpec.refiladoAnchoEspira.toString();
+        }
+      }
+      return copy;
+    });
+
+    setChecklistItems(template);
   };
 
   const loadQualityStage = (stage: string) => {
@@ -387,6 +443,20 @@ export const OrderDetail: React.FC = () => {
               </span>
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setShowSheetModal(true)}
+            className="btn"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.75rem',
+              padding: '1rem 1.5rem', fontSize: '1rem', fontWeight: 700,
+              backgroundColor: 'rgba(255,255,255,0.05)', color: clientTechnicalSheet ? 'var(--accent)' : 'var(--text-main)',
+              border: '1px solid var(--border)', cursor: 'pointer', borderRadius: '8px'
+            }}
+          >
+            <FileText size={20} />
+            <span>FICHA TÉCNICA CLIENTE</span>
+          </button>
           {user?.role === 'ADMIN' && (
             <Link
               to={`/ordenes/editar/${order.id}`}
@@ -437,6 +507,7 @@ export const OrderDetail: React.FC = () => {
             <DataField label="Medida Material" value={order?.technicalSpec?.materialMeasure} />
             <DataField label="Corte" value={order?.technicalSpec?.cut} />
             <DataField label="Lamina / Material" value={order?.technicalSpec?.lamina} />
+            <DataField label="Tipo de Material" value={order?.products?.map((p: any) => p.materialType).filter(Boolean).join(', ') || order?.products?.[0]?.materialType || 'Sin especificar'} />
             <DataField label="Metros Previstos" value={order?.technicalSpec?.meters ? `${order.technicalSpec.meters} m` : '-'} />
             <DataField label="Impresión en" value={order?.technicalSpec?.tube} />
             <DataField label="Tipo Impresion" value={order?.technicalSpec?.printingType} />
@@ -857,6 +928,46 @@ export const OrderDetail: React.FC = () => {
               <button className="btn btn-primary" onClick={saveQualityControl} disabled={savingQuality}>
                 <span>{savingQuality ? 'Guardando...' : 'Guardar Control'}</span>
               </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {showSheetModal && (
+        <ModalShell title={`Ficha Técnica de Cliente: ${order?.client?.name || 'Cliente'}`} onClose={() => setShowSheetModal(false)}>
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+              Información técnica de preparación, ajustes de máquina, clisés, tintas y configuraciones permanentes para este cliente.
+            </p>
+            {user?.role === 'ADMIN' ? (
+              <textarea
+                className="input"
+                style={{ minHeight: '220px', resize: 'vertical', width: '100%', fontFamily: 'monospace', fontSize: '0.875rem' }}
+                value={clientTechnicalSheet}
+                onChange={(e) => setClientTechnicalSheet(e.target.value)}
+                placeholder="Ej: Clisé código #402. Velocidad óptima 110 m/min. Ancho calandra 650 mm..."
+              />
+            ) : (
+              <div style={{
+                padding: '1rem',
+                backgroundColor: 'rgba(255,255,255,0.03)',
+                borderRadius: '8px',
+                border: '1px solid var(--border)',
+                minHeight: '160px',
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'monospace',
+                fontSize: '0.875rem'
+              }}>
+                {clientTechnicalSheet || 'No hay ficha técnica registrada para este cliente.'}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+              <button className="btn" onClick={() => setShowSheetModal(false)}>Cerrar</button>
+              {user?.role === 'ADMIN' && (
+                <button className="btn btn-primary" onClick={saveClientTechnicalSheet} disabled={savingSheet}>
+                  <span>{savingSheet ? 'Guardando...' : 'Guardar Ficha Técnica'}</span>
+                </button>
+              )}
             </div>
           </div>
         </ModalShell>

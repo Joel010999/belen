@@ -23,7 +23,8 @@ import {
   X,
   Sliders,
   ChevronRight,
-  Info
+  Info,
+  FileText
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { FormSection } from '../components/FormSection';
@@ -248,6 +249,7 @@ export const ProductionProcess: React.FC = () => {
   const [checklistItems, setChecklistItems] = useState(STAGE_CHECKLIST_TEMPLATES.IMPRESION);
   const [qualityStatus, setQualityStatus] = useState<'APROBADO' | 'OBSERVADO' | 'RECHAZADO'>('APROBADO');
   const [qualityObservations, setQualityObservations] = useState('');
+  const [clientTechnicalSheet, setClientTechnicalSheet] = useState<string>('');
 
   // Time log form data
   const [timeLogData, setTimeLogData] = useState({
@@ -283,10 +285,22 @@ export const ProductionProcess: React.FC = () => {
   const fetchSelectedOrder = async (orderId: string) => {
     if (!orderId) {
       setSelectedOrder(null);
+      setClientTechnicalSheet('');
       return;
     }
     const orderRes = await api.get(`/orders/${orderId}`);
     setSelectedOrder(orderRes.data);
+    if (orderRes.data?.clientId) {
+      try {
+        const sheetRes = await api.get(`/clients/${orderRes.data.clientId}/technical-sheet`);
+        setClientTechnicalSheet(sheetRes.data?.content || '');
+      } catch (e) {
+        console.error('Error fetching client sheet in terminal:', e);
+        setClientTechnicalSheet('');
+      }
+    } else {
+      setClientTechnicalSheet('');
+    }
   };
 
   useEffect(() => {
@@ -359,7 +373,34 @@ export const ProductionProcess: React.FC = () => {
         value: it.value || ''
       })));
     } else {
-      setChecklistItems(STAGE_CHECKLIST_TEMPLATES[activeStage]?.map((it) => ({ ...it })) || []);
+      const template = (STAGE_CHECKLIST_TEMPLATES[activeStage] || []).map((it) => {
+        const copy = { ...it };
+        if (activeStage === 'LAMINACION') {
+          if (copy.controlName === 'Carga' && selectedOrder.technicalSpec?.laminationAdhesiveLoad) {
+            copy.value = `${selectedOrder.technicalSpec.laminationAdhesiveLoad} g/m²`;
+          }
+          if (copy.controlName === 'Tipo material') {
+            const mat = selectedOrder.products?.map((p: any) => p.materialType).filter(Boolean).join(', ') || selectedOrder.technicalSpec?.laminationStructure || selectedOrder.technicalSpec?.lamina;
+            if (mat) copy.value = mat;
+          }
+          if (copy.controlName === 'Ancho' && selectedOrder.technicalSpec?.materialMeasure) {
+            copy.value = selectedOrder.technicalSpec.materialMeasure;
+          }
+        } else if (activeStage === 'REFILADO') {
+          if (copy.controlName === 'Sentido de salida' && selectedOrder.technicalSpec?.refiladoExitSense) {
+            copy.value = selectedOrder.technicalSpec.refiladoExitSense;
+          }
+          if (copy.controlName === 'Taca der-izq') {
+            const taca = selectedOrder.technicalSpec?.refiladoTacaRight || selectedOrder.technicalSpec?.refiladoTacaLeft;
+            if (taca) copy.value = taca;
+          }
+          if (copy.controlName === 'Ancho espira' && selectedOrder.technicalSpec?.refiladoAnchoEspira) {
+            copy.value = selectedOrder.technicalSpec.refiladoAnchoEspira.toString();
+          }
+        }
+        return copy;
+      });
+      setChecklistItems(template);
     }
 
     // Load quality control for active stage if present
@@ -1743,6 +1784,12 @@ export const ProductionProcess: React.FC = () => {
                       <p style={{ fontWeight: 700 }}>{selectedOrder.technicalSpec?.lamina || '-'}</p>
                     </div>
                     <div>
+                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Tipo de Material</p>
+                      <p style={{ fontWeight: 700, color: 'var(--accent)' }}>
+                        {selectedOrder.products?.map((p: any) => p.materialType).filter(Boolean).join(', ') || selectedOrder.products?.[0]?.materialType || 'Sin especificar'}
+                      </p>
+                    </div>
+                    <div>
                       <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Tubo / Núcleo</p>
                       <p style={{ fontWeight: 700 }}>{selectedOrder.technicalSpec?.tube || 'Sin definir'}</p>
                     </div>
@@ -1798,10 +1845,22 @@ export const ProductionProcess: React.FC = () => {
                         Especificaciones de Laminación
                       </h4>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                        <DataPill label="Estructura / Lámina" value={selectedOrder.technicalSpec?.lamina || '-'} />
-                        <DataPill label="Proporción de Mezcla Adhesivo" value={stageData.mixProportion || selectedOrder.technicalSpec?.mixProportion || '-'} />
+                        <DataPill label="Estructura / Material" value={selectedOrder.technicalSpec?.laminationStructure || selectedOrder.technicalSpec?.lamina || '-'} />
+                        <DataPill label="Adhesivo" value={selectedOrder.technicalSpec?.laminationAdhesive || '-'} />
+                        <DataPill label="Reticulante" value={selectedOrder.technicalSpec?.laminationReticulant || '-'} />
+                        <DataPill label="Diluyente" value={selectedOrder.technicalSpec?.laminationDiluent || '-'} />
+                        <DataPill label="Viscosidad" value={selectedOrder.technicalSpec?.laminationViscosity != null ? `${selectedOrder.technicalSpec.laminationViscosity} s` : '-'} />
+                        <DataPill label="Temp. Túnel" value={selectedOrder.technicalSpec?.laminationOvenTemp != null ? `${selectedOrder.technicalSpec.laminationOvenTemp} °C` : '-'} />
+                        <DataPill label="Temp. Calandra" value={selectedOrder.technicalSpec?.laminationCalenderTemp != null ? `${selectedOrder.technicalSpec.laminationCalenderTemp} °C` : '-'} />
+                        <DataPill label="Carga de Adhesivo" value={selectedOrder.technicalSpec?.laminationAdhesiveLoad != null ? `${selectedOrder.technicalSpec.laminationAdhesiveLoad} g/m²` : '-'} />
                         <DataPill label="Diámetro Bobina" value={selectedOrder.technicalSpec?.printingCoilDiameter ? `${selectedOrder.technicalSpec.printingCoilDiameter} mm` : '-'} />
                       </div>
+                      {selectedOrder.technicalSpec?.laminationObservations && (
+                        <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                          <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.25rem' }}>Observaciones de Laminación</p>
+                          <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-main)', whiteSpace: 'pre-line' }}>{selectedOrder.technicalSpec.laminationObservations}</p>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1838,6 +1897,32 @@ export const ProductionProcess: React.FC = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* Ficha Técnica General de Cliente */}
+                  <div className="card" style={{ border: '1px solid rgba(59, 130, 246, 0.3)', background: 'rgba(30, 41, 59, 0.4)' }}>
+                    <h4 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#93c5fd' }}>
+                      <FileText size={18} />
+                      Ficha Técnica Específica de Cliente ({selectedOrder.client?.name || 'Cliente'})
+                    </h4>
+                    {clientTechnicalSheet ? (
+                      <div style={{
+                        padding: '1rem',
+                        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)',
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'monospace',
+                        fontSize: '0.875rem',
+                        color: 'var(--text-main)'
+                      }}>
+                        {clientTechnicalSheet}
+                      </div>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        No hay ficha técnica permanente registrada para este cliente.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 

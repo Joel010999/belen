@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Save, Package, Ruler, ClipboardList, Layers, Plus, Trash2, Users, Cpu, Check, FlaskConical } from 'lucide-react';
+import { Save, Package, Ruler, ClipboardList, Layers, Plus, Trash2, Users, Cpu, Check, FlaskConical, FileText, X } from 'lucide-react';
 import api from '../services/api';
 import { FormSection } from '../components/FormSection';
 import { useAuth } from '../hooks/useAuth';
@@ -172,7 +172,7 @@ export const OrderForm: React.FC = () => {
   }, [id, isEditing, user?.id]);
 
   useEffect(() => {
-        setFormData(prev => {
+    setFormData(prev => {
       const refiladoDePie = Boolean(prev.technicalSpec.pie);
       const refiladoDeCabeza = Boolean(prev.technicalSpec.cabeza);
       const refiladoExitSense = refiladoDePie ? 'De pie' : refiladoDeCabeza ? 'De cabeza' : '';
@@ -207,6 +207,46 @@ export const OrderForm: React.FC = () => {
     formData.technicalSpec.tacaLeft
   ]);
 
+  const [clientTechnicalSheet, setClientTechnicalSheet] = useState('');
+  const [loadingSheet, setLoadingSheet] = useState(false);
+  const [savingSheet, setSavingSheet] = useState(false);
+  const [showSheetModal, setShowSheetModal] = useState(false);
+
+  // Cargar ficha técnica cuando se selecciona un cliente
+  useEffect(() => {
+    if (!formData.clientId) {
+      setClientTechnicalSheet('');
+      return;
+    }
+    const loadSheet = async () => {
+      setLoadingSheet(true);
+      try {
+        const res = await api.get(`/clients/${formData.clientId}/technical-sheet`);
+        setClientTechnicalSheet(res.data?.content || '');
+      } catch (err) {
+        console.error('Error cargando ficha técnica del cliente:', err);
+      } finally {
+        setLoadingSheet(false);
+      }
+    };
+    loadSheet();
+  }, [formData.clientId]);
+
+  const saveClientTechnicalSheet = async () => {
+    if (!formData.clientId) return;
+    setSavingSheet(true);
+    try {
+      await api.put(`/clients/${formData.clientId}/technical-sheet`, { content: clientTechnicalSheet });
+      alert('Ficha técnica del cliente guardada correctamente.');
+      setShowSheetModal(false);
+    } catch (err) {
+      console.error('Error guardando ficha técnica:', err);
+      alert('Error al guardar la ficha técnica del cliente');
+    } finally {
+      setSavingSheet(false);
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const target = e.target;
     const { name } = target;
@@ -230,7 +270,34 @@ export const OrderForm: React.FC = () => {
   const handleProductChange = (index: number, field: string, value: string) => {
     const nextProducts = [...formData.products];
     (nextProducts[index] as any)[field] = value;
-    setFormData((prev) => ({ ...prev, products: nextProducts }));
+
+    setFormData((prev) => {
+      const updated = { ...prev, products: nextProducts };
+      // Solo en modo creación o si el usuario no ha puesto una medida técnica manual diferente
+      if (!isEditing) {
+        if (field === 'productId') {
+          const selectedProd = products.find(p => p.id.toString() === value);
+          if (selectedProd) {
+            updated.technicalSpec = {
+              ...updated.technicalSpec,
+              materialMeasure: selectedProd.name
+            };
+          }
+        } else if (field === 'plannedQty') {
+          const totalMeters = nextProducts.reduce((acc, p) => {
+            const num = parseFloat(p.plannedQty.replace(/[^0-9.]/g, '')) || 0;
+            return acc + num;
+          }, 0);
+          if (totalMeters > 0) {
+            updated.technicalSpec = {
+              ...updated.technicalSpec,
+              meters: totalMeters.toString()
+            };
+          }
+        }
+      }
+      return updated;
+    });
   };
 
   const addProductRow = () => {
@@ -425,8 +492,30 @@ export const OrderForm: React.FC = () => {
           <input name="orderNumber" value={formData.orderNumber} onChange={handleInputChange} type="text" className="input" required />
         </div>
         <div>
-          <label className="label">Cliente</label>
-          <select name="clientId" value={formData.clientId} onChange={handleInputChange} className="input" required>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label className="label" style={{ marginBottom: 0 }}>Cliente</label>
+            {formData.clientId && (
+              <button
+                type="button"
+                onClick={() => setShowSheetModal(true)}
+                className="btn"
+                style={{
+                  padding: '0.2rem 0.5rem',
+                  fontSize: '0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  color: clientTechnicalSheet ? 'var(--accent)' : 'var(--text-muted)',
+                  border: '1px solid var(--border)',
+                  background: 'rgba(255,255,255,0.03)'
+                }}
+              >
+                <FileText size={14} />
+                <span>{clientTechnicalSheet ? 'Ver Ficha Técnica' : 'Crear Ficha Técnica'}</span>
+              </button>
+            )}
+          </div>
+          <select name="clientId" value={formData.clientId} onChange={handleInputChange} className="input" style={{ marginTop: '0.4rem' }} required>
             <option value="">Seleccione un cliente...</option>
             {clients.map((client) => (
               <option key={client.id} value={client.id}>{client.name} ({client.code})</option>
@@ -788,11 +877,90 @@ export const OrderForm: React.FC = () => {
               ))}
             </tbody>
           </table>
-          <button type="button" onClick={addColorRow} className="btn" style={{ marginTop: '1rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Plus size={18} /> Anadir Color
-          </button>
         </div>
       </FormSection>
+
+      {showSheetModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.8)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div className="card" style={{
+            width: '100%',
+            maxWidth: '650px',
+            backgroundColor: 'var(--card-bg, #1e293b)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            padding: '1.5rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FileText size={20} color="var(--primary)" />
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>
+                  Ficha Técnica de Cliente: {clients.find(c => c.id.toString() === formData.clientId)?.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSheetModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                Información técnica de preparación, ajustes de máquina, tintas, bobinado y configuraciones específicas guardadas permanentemente para este cliente.
+              </p>
+              {loadingSheet ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando ficha técnica...</div>
+              ) : (
+                <textarea
+                  className="input"
+                  style={{ minHeight: '220px', resize: 'vertical', width: '100%', fontFamily: 'monospace', fontSize: '0.875rem' }}
+                  value={clientTechnicalSheet}
+                  onChange={(e) => setClientTechnicalSheet(e.target.value)}
+                  placeholder="Ej: Clisé código #402. Velocidad óptima 110 m/min. Ancho calandra 650 mm. Requiere secado con temperatura de túnel constante a 55°C..."
+                />
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setShowSheetModal(false)}
+                style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)' }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={saveClientTechnicalSheet}
+                disabled={savingSheet || loadingSheet}
+              >
+                <span>{savingSheet ? 'Guardando...' : 'Guardar Ficha Técnica'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 };
