@@ -147,6 +147,14 @@ const normalizeQtyText = (val: any) => {
   return text.length > 0 ? text : null;
 };
 
+const normalizeStringFlag = (val: any): string | null => {
+  if (val === undefined || val === null) return null;
+  if (typeof val === 'boolean') return val ? 'true' : null;
+  const text = String(val).trim();
+  if (text.toLowerCase() === 'false' || text === '0') return null;
+  return text.length > 0 ? text : null;
+};
+
 const appendUniqueText = (current: string | null | undefined, next: string | null | undefined) => {
   const cleanNext = normalizeQtyText(next);
   if (!cleanNext) return current || null;
@@ -399,7 +407,8 @@ export const createOrder = async (orderData: any, actor?: ActorContext) => {
         data: {
           orderId: order.id,
           productId: finalProductId,
-          plannedQty: finalPlannedQty || ""
+          plannedQty: finalPlannedQty || "",
+          materialType: orderData.materialType || null
         }
       });
     }
@@ -452,44 +461,54 @@ export const createOrder = async (orderData: any, actor?: ActorContext) => {
 
     // 4. Create the technical specification linked to the order
     if (technicalSpec) {
+      const pieFlag = normalizeStringFlag(technicalSpec.pie);
+      const cabezaFlag = normalizeStringFlag(technicalSpec.cabeza);
+      const tacaRightFlag = normalizeStringFlag(technicalSpec.tacaRight);
+      const tacaLeftFlag = normalizeStringFlag(technicalSpec.tacaLeft);
+      const derivedExitSense = pieFlag ? 'De pie' : cabezaFlag ? 'De cabeza' : null;
+      const refiladoExitSense = technicalSpec.refiladoExitSense || derivedExitSense;
+      const printingExitSense = technicalSpec.printingExitSense || derivedExitSense;
+      const refiladoDePie = technicalSpec.refiladoDePie !== undefined ? Boolean(technicalSpec.refiladoDePie) : Boolean(pieFlag);
+      const refiladoDeCabeza = technicalSpec.refiladoDeCabeza !== undefined ? Boolean(technicalSpec.refiladoDeCabeza) : Boolean(cabezaFlag);
+      const refiladoTacaRight = technicalSpec.refiladoTacaRight || (tacaRightFlag ? 'Derecha' : null);
+      const refiladoTacaLeft = technicalSpec.refiladoTacaLeft || (tacaLeftFlag ? 'Izquierda' : null);
+
       await tx.technicalSpec.create({
         data: {
           orderId: order.id,
-          materialMeasure: technicalSpec.materialMeasure,
-          cut: technicalSpec.cut,
-          lamina: technicalSpec.lamina,
+          materialMeasure: technicalSpec.materialMeasure || null,
+          cut: technicalSpec.cut || null,
+          lamina: technicalSpec.lamina || null,
           meters: parseSafeFloat(technicalSpec.meters),
-          tube: technicalSpec.tube,
+          tube: technicalSpec.tube || null,
           colorCount: parseSafeInt(technicalSpec.colorCount),
-          pie: technicalSpec.pie,
-          designName: technicalSpec.designName,
-          cabeza: technicalSpec.cabeza,
-          printingType: technicalSpec.printingType,
-          printingExitSense: technicalSpec.printingExitSense,
+          pie: pieFlag,
+          designName: technicalSpec.designName || null,
+          cabeza: cabezaFlag,
+          printingType: technicalSpec.printingType || null,
+          printingExitSense,
           printingCoilDiameter: parseSafeFloat(technicalSpec.printingCoilDiameter),
-          tacaRight: technicalSpec.tacaRight,
-          tacaLeft: technicalSpec.tacaLeft,
-          clisheAlignment: technicalSpec.clisheAlignment,
-          techObservations: technicalSpec.techObservations,
-          refiladoExitSense: technicalSpec.refiladoExitSense,
-          refiladoDePie: Boolean(technicalSpec.refiladoDePie),
-          refiladoDeCabeza: Boolean(technicalSpec.refiladoDeCabeza),
-          refiladoTacaRight: technicalSpec.refiladoTacaRight,
-          refiladoTacaLeft: technicalSpec.refiladoTacaLeft,
+          tacaRight: tacaRightFlag,
+          tacaLeft: tacaLeftFlag,
+          clisheAlignment: technicalSpec.clisheAlignment || null,
+          techObservations: technicalSpec.techObservations || null,
+          refiladoExitSense,
+          refiladoDePie,
+          refiladoDeCabeza,
+          refiladoTacaRight,
+          refiladoTacaLeft,
           refiladoAnchoEspira: parseSafeFloat(technicalSpec.refiladoAnchoEspira),
           refiladoCoilDiameter: parseSafeFloat(technicalSpec.refiladoCoilDiameter),
           refiladoMeters: parseSafeFloat(technicalSpec.refiladoMeters),
-          laminationStructure: technicalSpec.laminationStructure,
-          laminationAdhesive: technicalSpec.laminationAdhesive,
-          laminationReticulant: technicalSpec.laminationReticulant,
-          laminationDiluent: technicalSpec.laminationDiluent,
+          laminationStructure: technicalSpec.laminationStructure || null,
+          laminationAdhesive: technicalSpec.laminationAdhesive || null,
+          laminationReticulant: technicalSpec.laminationReticulant || null,
+          laminationDiluent: technicalSpec.laminationDiluent || null,
           laminationViscosity: parseSafeFloat(technicalSpec.laminationViscosity),
           laminationOvenTemp: parseSafeFloat(technicalSpec.laminationOvenTemp),
           laminationCalenderTemp: parseSafeFloat(technicalSpec.laminationCalenderTemp),
           laminationAdhesiveLoad: parseSafeFloat(technicalSpec.laminationAdhesiveLoad),
-          laminationObservations: technicalSpec.laminationObservations,
-
-
+          laminationObservations: technicalSpec.laminationObservations || null,
         }
       });
     }
@@ -1951,80 +1970,90 @@ export const updateOrder = async (id: number, orderData: any, actor?: ActorConte
     }
 
     if (technicalSpec) {
+      const pieFlag = normalizeStringFlag(technicalSpec.pie);
+      const cabezaFlag = normalizeStringFlag(technicalSpec.cabeza);
+      const tacaRightFlag = normalizeStringFlag(technicalSpec.tacaRight);
+      const tacaLeftFlag = normalizeStringFlag(technicalSpec.tacaLeft);
+      const derivedExitSense = pieFlag ? 'De pie' : cabezaFlag ? 'De cabeza' : null;
+      const refiladoExitSense = technicalSpec.refiladoExitSense || derivedExitSense;
+      const printingExitSense = technicalSpec.printingExitSense || derivedExitSense;
+      const refiladoDePie = technicalSpec.refiladoDePie !== undefined ? Boolean(technicalSpec.refiladoDePie) : Boolean(pieFlag);
+      const refiladoDeCabeza = technicalSpec.refiladoDeCabeza !== undefined ? Boolean(technicalSpec.refiladoDeCabeza) : Boolean(cabezaFlag);
+      const refiladoTacaRight = technicalSpec.refiladoTacaRight || (tacaRightFlag ? 'Derecha' : null);
+      const refiladoTacaLeft = technicalSpec.refiladoTacaLeft || (tacaLeftFlag ? 'Izquierda' : null);
+
       await tx.technicalSpec.upsert({
         where: { orderId: id },
         update: {
-          materialMeasure: technicalSpec.materialMeasure,
-          cut: technicalSpec.cut,
-          lamina: technicalSpec.lamina,
+          materialMeasure: technicalSpec.materialMeasure || null,
+          cut: technicalSpec.cut || null,
+          lamina: technicalSpec.lamina || null,
           meters: parseSafeFloat(technicalSpec.meters),
-          tube: technicalSpec.tube,
+          tube: technicalSpec.tube || null,
           colorCount: parseSafeInt(technicalSpec.colorCount),
-          pie: technicalSpec.pie,
-          designName: technicalSpec.designName,
-          cabeza: technicalSpec.cabeza,
-          printingType: technicalSpec.printingType,
-          printingExitSense: technicalSpec.printingExitSense,
+          pie: pieFlag,
+          designName: technicalSpec.designName || null,
+          cabeza: cabezaFlag,
+          printingType: technicalSpec.printingType || null,
+          printingExitSense,
           printingCoilDiameter: parseSafeFloat(technicalSpec.printingCoilDiameter),
-          tacaRight: technicalSpec.tacaRight,
-          tacaLeft: technicalSpec.tacaLeft,
-          clisheAlignment: technicalSpec.clisheAlignment,
-          techObservations: technicalSpec.techObservations,
-          refiladoExitSense: technicalSpec.refiladoExitSense,
-          refiladoDePie: Boolean(technicalSpec.refiladoDePie),
-          refiladoDeCabeza: Boolean(technicalSpec.refiladoDeCabeza),
-          refiladoTacaRight: technicalSpec.refiladoTacaRight,
-          refiladoTacaLeft: technicalSpec.refiladoTacaLeft,
+          tacaRight: tacaRightFlag,
+          tacaLeft: tacaLeftFlag,
+          clisheAlignment: technicalSpec.clisheAlignment || null,
+          techObservations: technicalSpec.techObservations || null,
+          refiladoExitSense,
+          refiladoDePie,
+          refiladoDeCabeza,
+          refiladoTacaRight,
+          refiladoTacaLeft,
           refiladoAnchoEspira: parseSafeFloat(technicalSpec.refiladoAnchoEspira),
           refiladoCoilDiameter: parseSafeFloat(technicalSpec.refiladoCoilDiameter),
           refiladoMeters: parseSafeFloat(technicalSpec.refiladoMeters),
-          laminationStructure: technicalSpec.laminationStructure,
-          laminationAdhesive: technicalSpec.laminationAdhesive,
-          laminationReticulant: technicalSpec.laminationReticulant,
-          laminationDiluent: technicalSpec.laminationDiluent,
+          laminationStructure: technicalSpec.laminationStructure || null,
+          laminationAdhesive: technicalSpec.laminationAdhesive || null,
+          laminationReticulant: technicalSpec.laminationReticulant || null,
+          laminationDiluent: technicalSpec.laminationDiluent || null,
           laminationViscosity: parseSafeFloat(technicalSpec.laminationViscosity),
           laminationOvenTemp: parseSafeFloat(technicalSpec.laminationOvenTemp),
           laminationCalenderTemp: parseSafeFloat(technicalSpec.laminationCalenderTemp),
           laminationAdhesiveLoad: parseSafeFloat(technicalSpec.laminationAdhesiveLoad),
-          laminationObservations: technicalSpec.laminationObservations,
-
-
+          laminationObservations: technicalSpec.laminationObservations || null,
         },
         create: {
           orderId: id,
-          materialMeasure: technicalSpec.materialMeasure,
-          cut: technicalSpec.cut,
-          lamina: technicalSpec.lamina,
+          materialMeasure: technicalSpec.materialMeasure || null,
+          cut: technicalSpec.cut || null,
+          lamina: technicalSpec.lamina || null,
           meters: parseSafeFloat(technicalSpec.meters),
-          tube: technicalSpec.tube,
+          tube: technicalSpec.tube || null,
           colorCount: parseSafeInt(technicalSpec.colorCount),
-          pie: technicalSpec.pie,
-          designName: technicalSpec.designName,
-          cabeza: technicalSpec.cabeza,
-          printingType: technicalSpec.printingType,
-          tacaRight: technicalSpec.tacaRight,
-          tacaLeft: technicalSpec.tacaLeft,
-          clisheAlignment: technicalSpec.clisheAlignment,
-          techObservations: technicalSpec.techObservations,
-          refiladoExitSense: technicalSpec.refiladoExitSense,
-          refiladoDePie: Boolean(technicalSpec.refiladoDePie),
-          refiladoDeCabeza: Boolean(technicalSpec.refiladoDeCabeza),
-          refiladoTacaRight: technicalSpec.refiladoTacaRight,
-          refiladoTacaLeft: technicalSpec.refiladoTacaLeft,
+          pie: pieFlag,
+          designName: technicalSpec.designName || null,
+          cabeza: cabezaFlag,
+          printingType: technicalSpec.printingType || null,
+          printingExitSense,
+          printingCoilDiameter: parseSafeFloat(technicalSpec.printingCoilDiameter),
+          tacaRight: tacaRightFlag,
+          tacaLeft: tacaLeftFlag,
+          clisheAlignment: technicalSpec.clisheAlignment || null,
+          techObservations: technicalSpec.techObservations || null,
+          refiladoExitSense,
+          refiladoDePie,
+          refiladoDeCabeza,
+          refiladoTacaRight,
+          refiladoTacaLeft,
           refiladoAnchoEspira: parseSafeFloat(technicalSpec.refiladoAnchoEspira),
           refiladoCoilDiameter: parseSafeFloat(technicalSpec.refiladoCoilDiameter),
           refiladoMeters: parseSafeFloat(technicalSpec.refiladoMeters),
-          laminationStructure: technicalSpec.laminationStructure,
-          laminationAdhesive: technicalSpec.laminationAdhesive,
-          laminationReticulant: technicalSpec.laminationReticulant,
-          laminationDiluent: technicalSpec.laminationDiluent,
+          laminationStructure: technicalSpec.laminationStructure || null,
+          laminationAdhesive: technicalSpec.laminationAdhesive || null,
+          laminationReticulant: technicalSpec.laminationReticulant || null,
+          laminationDiluent: technicalSpec.laminationDiluent || null,
           laminationViscosity: parseSafeFloat(technicalSpec.laminationViscosity),
           laminationOvenTemp: parseSafeFloat(technicalSpec.laminationOvenTemp),
           laminationCalenderTemp: parseSafeFloat(technicalSpec.laminationCalenderTemp),
           laminationAdhesiveLoad: parseSafeFloat(technicalSpec.laminationAdhesiveLoad),
-          laminationObservations: technicalSpec.laminationObservations,
-
-
+          laminationObservations: technicalSpec.laminationObservations || null,
         }
       });
     }

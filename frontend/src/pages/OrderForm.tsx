@@ -117,27 +117,27 @@ export const OrderForm: React.FC = () => {
             specifications: order.specifications || '',
             observations: order.observations || '',
             technicalSpec: {
-              materialMeasure: order.technicalSpec?.materialMeasure || '',
+              materialMeasure: order.technicalSpec?.materialMeasure || order.products?.[0]?.product?.name || order.product?.name || '',
               cut: order.technicalSpec?.cut || '',
               lamina: order.technicalSpec?.lamina || '',
-              meters: order.technicalSpec?.meters?.toString() || '',
+              meters: order.technicalSpec?.meters?.toString() || order.plannedQty?.toString() || '',
               tube: order.technicalSpec?.tube || '',
               colorCount: order.technicalSpec?.colorCount?.toString() || '0',
-              pie: order.technicalSpec?.pie || '',
-              cabeza: order.technicalSpec?.cabeza || '',
+              pie: order.technicalSpec?.pie || (order.technicalSpec?.refiladoDePie || order.technicalSpec?.printingExitSense?.toLowerCase().includes('pie') ? 'X' : ''),
+              cabeza: order.technicalSpec?.cabeza || (order.technicalSpec?.refiladoDeCabeza || order.technicalSpec?.printingExitSense?.toLowerCase().includes('cabeza') ? 'X' : ''),
               designName: order.technicalSpec?.designName || '',
               printingType: order.technicalSpec?.printingType || 'Directa',
-              printingExitSense: order.technicalSpec?.printingExitSense || '',
+              printingExitSense: order.technicalSpec?.printingExitSense || (order.technicalSpec?.pie ? 'De pie' : order.technicalSpec?.cabeza ? 'De cabeza' : ''),
               printingCoilDiameter: order.technicalSpec?.printingCoilDiameter?.toString() || '',
-              tacaRight: order.technicalSpec?.tacaRight || '',
-              tacaLeft: order.technicalSpec?.tacaLeft || '',
+              tacaRight: order.technicalSpec?.tacaRight || (order.technicalSpec?.refiladoTacaRight ? 'X' : ''),
+              tacaLeft: order.technicalSpec?.tacaLeft || (order.technicalSpec?.refiladoTacaLeft ? 'X' : ''),
               clisheAlignment: order.technicalSpec?.clisheAlignment || '',
               techObservations: order.technicalSpec?.techObservations || '',
-              refiladoExitSense: order.technicalSpec?.refiladoExitSense || '',
-              refiladoDePie: Boolean(order.technicalSpec?.refiladoDePie),
-              refiladoDeCabeza: Boolean(order.technicalSpec?.refiladoDeCabeza),
-              refiladoTacaRight: order.technicalSpec?.refiladoTacaRight || '',
-              refiladoTacaLeft: order.technicalSpec?.refiladoTacaLeft || '',
+              refiladoExitSense: order.technicalSpec?.refiladoExitSense || (order.technicalSpec?.pie ? 'De pie' : order.technicalSpec?.cabeza ? 'De cabeza' : ''),
+              refiladoDePie: Boolean(order.technicalSpec?.refiladoDePie || order.technicalSpec?.pie),
+              refiladoDeCabeza: Boolean(order.technicalSpec?.refiladoDeCabeza || order.technicalSpec?.cabeza),
+              refiladoTacaRight: order.technicalSpec?.refiladoTacaRight || (order.technicalSpec?.tacaRight ? 'Derecha' : ''),
+              refiladoTacaLeft: order.technicalSpec?.refiladoTacaLeft || (order.technicalSpec?.tacaLeft ? 'Izquierda' : ''),
               refiladoAnchoEspira: order.technicalSpec?.refiladoAnchoEspira?.toString() || '',
               refiladoCoilDiameter: order.technicalSpec?.refiladoCoilDiameter?.toString() || '',
               refiladoMeters: order.technicalSpec?.refiladoMeters?.toString() || '',
@@ -175,7 +175,9 @@ export const OrderForm: React.FC = () => {
     setFormData(prev => {
       const refiladoDePie = Boolean(prev.technicalSpec.pie);
       const refiladoDeCabeza = Boolean(prev.technicalSpec.cabeza);
-      const refiladoExitSense = refiladoDePie ? 'De pie' : refiladoDeCabeza ? 'De cabeza' : '';
+      const exitSense = refiladoDePie ? 'De pie' : refiladoDeCabeza ? 'De cabeza' : '';
+      const refiladoExitSense = exitSense;
+      const printingExitSense = exitSense;
       const refiladoTacaRight = prev.technicalSpec.tacaRight ? 'Derecha' : '';
       const refiladoTacaLeft = prev.technicalSpec.tacaLeft ? 'Izquierda' : '';
 
@@ -183,6 +185,7 @@ export const OrderForm: React.FC = () => {
         prev.technicalSpec.refiladoDePie === refiladoDePie &&
         prev.technicalSpec.refiladoDeCabeza === refiladoDeCabeza &&
         prev.technicalSpec.refiladoExitSense === refiladoExitSense &&
+        prev.technicalSpec.printingExitSense === printingExitSense &&
         prev.technicalSpec.refiladoTacaRight === refiladoTacaRight &&
         prev.technicalSpec.refiladoTacaLeft === refiladoTacaLeft
       ) {
@@ -195,6 +198,7 @@ export const OrderForm: React.FC = () => {
           refiladoDePie,
           refiladoDeCabeza,
           refiladoExitSense,
+          printingExitSense,
           refiladoTacaRight,
           refiladoTacaLeft
         }
@@ -273,27 +277,25 @@ export const OrderForm: React.FC = () => {
 
     setFormData((prev) => {
       const updated = { ...prev, products: nextProducts };
-      // Solo en modo creación o si el usuario no ha puesto una medida técnica manual diferente
-      if (!isEditing) {
-        if (field === 'productId') {
-          const selectedProd = products.find(p => p.id.toString() === value);
-          if (selectedProd) {
-            updated.technicalSpec = {
-              ...updated.technicalSpec,
-              materialMeasure: selectedProd.name
-            };
-          }
-        } else if (field === 'plannedQty') {
-          const totalMeters = nextProducts.reduce((acc, p) => {
-            const num = parseFloat(p.plannedQty.replace(/[^0-9.]/g, '')) || 0;
-            return acc + num;
-          }, 0);
-          if (totalMeters > 0) {
-            updated.technicalSpec = {
-              ...updated.technicalSpec,
-              meters: totalMeters.toString()
-            };
-          }
+      // Sincronización automática de medidas y metros tanto al crear como al editar
+      if (field === 'productId') {
+        const selectedProd = products.find(p => p.id.toString() === value);
+        if (selectedProd) {
+          updated.technicalSpec = {
+            ...updated.technicalSpec,
+            materialMeasure: selectedProd.name
+          };
+        }
+      } else if (field === 'plannedQty') {
+        const totalMeters = nextProducts.reduce((acc, p) => {
+          const num = parseFloat(p.plannedQty.replace(/[^0-9.]/g, '')) || 0;
+          return acc + num;
+        }, 0);
+        if (totalMeters > 0) {
+          updated.technicalSpec = {
+            ...updated.technicalSpec,
+            meters: totalMeters.toString()
+          };
         }
       }
       return updated;
@@ -651,6 +653,20 @@ export const OrderForm: React.FC = () => {
         <div>
           <label className="label">Lamina / Material</label>
           <input name="technicalSpec.lamina" value={formData.technicalSpec.lamina} onChange={handleInputChange} type="text" className="input" placeholder="Ej: Polipropileno" />
+        </div>
+        <div>
+          <label className="label">Tipo de Material</label>
+          <select
+            value={formData.products[0]?.materialType || ''}
+            onChange={(e) => handleProductChange(0, 'materialType', e.target.value)}
+            className="input"
+          >
+            <option value="">Sin especificar</option>
+            <option value="Cristal">Cristal</option>
+            <option value="Metalizado">Metalizado</option>
+            <option value="Perlado">Perlado</option>
+            <option value="Mate">Mate</option>
+          </select>
         </div>
         <div>
           <label className="label">Metros Totales a Imprimir</label>
