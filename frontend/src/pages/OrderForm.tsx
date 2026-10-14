@@ -117,7 +117,7 @@ export const OrderForm: React.FC = () => {
             specifications: order.specifications || '',
             observations: order.observations || '',
             technicalSpec: {
-              materialMeasure: order.technicalSpec?.materialMeasure || order.products?.[0]?.product?.name || order.product?.name || '',
+              materialMeasure: order.technicalSpec?.materialMeasure || '',
               cut: order.technicalSpec?.cut || '',
               lamina: order.technicalSpec?.lamina || '',
               meters: order.technicalSpec?.meters?.toString() || order.plannedQty?.toString() || '',
@@ -277,16 +277,8 @@ export const OrderForm: React.FC = () => {
 
     setFormData((prev) => {
       const updated = { ...prev, products: nextProducts };
-      // Sincronización automática de medidas y metros tanto al crear como al editar
-      if (field === 'productId') {
-        const selectedProd = products.find(p => p.id.toString() === value);
-        if (selectedProd) {
-          updated.technicalSpec = {
-            ...updated.technicalSpec,
-            materialMeasure: selectedProd.name
-          };
-        }
-      } else if (field === 'plannedQty') {
+      // Sincronización automática de metros tanto al crear como al editar
+      if (field === 'plannedQty') {
         const totalMeters = nextProducts.reduce((acc, p) => {
           const num = parseFloat(p.plannedQty.replace(/[^0-9.]/g, '')) || 0;
           return acc + num;

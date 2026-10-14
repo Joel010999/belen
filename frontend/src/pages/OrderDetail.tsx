@@ -511,7 +511,7 @@ export const OrderDetail: React.FC = () => {
             <DataField label="Metros Previstos" value={order?.technicalSpec?.meters ? `${order.technicalSpec.meters} m` : '-'} />
             <DataField label="Impresión en" value={order?.technicalSpec?.tube} />
             <DataField label="Tipo Impresion" value={order?.technicalSpec?.printingType} />
-            <DataField label="Diametro bobina impresion" value={order?.technicalSpec?.printingCoilDiameter} />
+            <DataField label="Diametro bobina impresion" value={order?.technicalSpec?.printingCoilDiameter ? `${order.technicalSpec.printingCoilDiameter} mm` : '-'} />
             <DataField label="Pie" value={order?.technicalSpec?.pie ? 'Marcado' : 'Sin marcar'} />
             <DataField label="Cabeza" value={order?.technicalSpec?.cabeza ? 'Marcado' : 'Sin marcar'} />
             <DataField label="Taca Derecha" value={order?.technicalSpec?.tacaRight ? 'Marcado' : 'Sin marcar'} />
@@ -525,9 +525,9 @@ export const OrderDetail: React.FC = () => {
                 <DataField label="De cabeza" value={order?.technicalSpec?.refiladoDeCabeza ? 'Si' : 'No'} />
                 <DataField label="Taca derecha" value={order?.technicalSpec?.refiladoTacaRight} />
                 <DataField label="Taca izquierda" value={order?.technicalSpec?.refiladoTacaLeft} />
-                <DataField label="Ancho espira" value={order?.technicalSpec?.refiladoAnchoEspira} />
-                <DataField label="Diametro" value={order?.technicalSpec?.refiladoCoilDiameter} />
-                <DataField label="Metros" value={order?.technicalSpec?.refiladoMeters} />
+                <DataField label="Ancho espira" value={order?.technicalSpec?.refiladoAnchoEspira != null ? `${order.technicalSpec.refiladoAnchoEspira} mm` : '-'} />
+                <DataField label="Diametro" value={order?.technicalSpec?.refiladoCoilDiameter != null ? `${order.technicalSpec.refiladoCoilDiameter} mm` : '-'} />
+                <DataField label="Metros" value={order?.technicalSpec?.refiladoMeters != null ? `${order.technicalSpec.refiladoMeters} m` : '-'} />
               </div>
             </div>
             <div style={{ gridColumn: 'span 2', marginTop: '1rem' }}>
@@ -546,10 +546,10 @@ export const OrderDetail: React.FC = () => {
               <DataField label="Adhesivo" value={order?.technicalSpec?.laminationAdhesive} />
               <DataField label="Reticulante" value={order?.technicalSpec?.laminationReticulant} />
               <DataField label="Diluyente" value={order?.technicalSpec?.laminationDiluent} />
-              <DataField label="Viscosidad" value={order?.technicalSpec?.laminationViscosity} />
-              <DataField label="Temp. Tunel (°C)" value={order?.technicalSpec?.laminationOvenTemp} />
-              <DataField label="Temp. Calandra (°C)" value={order?.technicalSpec?.laminationCalenderTemp} />
-              <DataField label="Carga de Adhesivo" value={order?.technicalSpec?.laminationAdhesiveLoad} />
+              <DataField label="Viscosidad" value={order?.technicalSpec?.laminationViscosity != null ? `${order.technicalSpec.laminationViscosity} s` : '-'} />
+              <DataField label="Temp. Tunel (°C)" value={order?.technicalSpec?.laminationOvenTemp != null ? `${order.technicalSpec.laminationOvenTemp} °C` : '-'} />
+              <DataField label="Temp. Calandra (°C)" value={order?.technicalSpec?.laminationCalenderTemp != null ? `${order.technicalSpec.laminationCalenderTemp} °C` : '-'} />
+              <DataField label="Carga de Adhesivo" value={order?.technicalSpec?.laminationAdhesiveLoad != null ? `${order.technicalSpec.laminationAdhesiveLoad} g/m²` : '-'} />
             </div>
             <div style={{ gridColumn: 'span 2', marginTop: '0.5rem' }}>
               <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Observaciones Laminacion</p>

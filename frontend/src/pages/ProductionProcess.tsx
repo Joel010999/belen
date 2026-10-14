@@ -326,14 +326,30 @@ export const ProductionProcess: React.FC = () => {
 
   useEffect(() => {
     if (selectedOrderId) {
+      setSelectedOrder(null);
+      setClientTechnicalSheet('');
+      setProcessSuccess(null);
+      setError(null);
+      setStageData((prev) => ({
+        ...createInitialStageData(),
+        machineId: user?.role === 'MACHINE' && user.machine?.type?.toUpperCase() === activeStage
+          ? user.machine.id.toString()
+          : ''
+      }));
+      setMaterialLots([createInitialMaterialLot()]);
+      setMetricEntries([createInitialMetricEntry()]);
+      setRefiladoOutputBobbins([createInitialOutputBobbin()]);
+      setRefiladoScrapEntries([createInitialScrapEntry()]);
+      setConfeccionOutputs([createInitialConfeccionOutput()]);
       fetchSelectedOrder(selectedOrderId).catch((err) => {
         console.error(err);
         setError('No se pudo cargar el detalle de la orden seleccionada.');
       });
     } else {
       setSelectedOrder(null);
+      setClientTechnicalSheet('');
     }
-  }, [selectedOrderId]);
+  }, [selectedOrderId, activeStage, user?.machine?.id, user?.machine?.type, user?.role]);
 
   // Stage reset when changing active stage
   useEffect(() => {
@@ -1363,7 +1379,15 @@ export const ProductionProcess: React.FC = () => {
                 return (
                   <div
                     key={order.id}
-                    onClick={() => setSelectedOrderId(order.id.toString())}
+                    data-order-card={order.orderNumber}
+                    data-order-id={order.id}
+                    onClick={() => {
+                      if (selectedOrderId === order.id.toString()) {
+                        fetchSelectedOrder(order.id.toString());
+                      } else {
+                        setSelectedOrderId(order.id.toString());
+                      }
+                    }}
                     style={{
                       padding: '1rem 1.15rem',
                       borderRadius: '12px',
@@ -1718,7 +1742,7 @@ export const ProductionProcess: React.FC = () => {
               }}>
                 {[
                   { key: 'METRICS', label: 'Producción & Métricas', icon: Sliders },
-                  { key: 'SPECS', label: 'Especificaciones Técnicas', icon: Info },
+                  { key: 'SPECS', label: 'Ficha Técnica / Especificaciones', icon: Info },
                   { key: 'TIMES', label: 'Tiempos & Paradas', icon: Clock },
                   { key: 'QUALITY', label: 'Checklist & Calidad', icon: ShieldCheck }
                 ].map((t) => {
@@ -1753,35 +1777,45 @@ export const ProductionProcess: React.FC = () => {
 
               {/* TAB 1: ESPECIFICACIONES TÉCNICAS */}
               {activeTab === 'SPECS' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  <FormSection title="Ficha Técnica Operativa" icon={<StageIcon size={22} />}>
+                <div data-testid="order-specs-container" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {/* Ficha Técnica Particular de la Orden Seleccionada */}
+                  <div data-testid="order-particular-specs" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <FormSection title="Ficha Técnica Operativa — Resumen de Orden" icon={<StageIcon size={22} />}>
                     <div>
                       <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Orden</p>
-                      <p style={{ fontWeight: 800 }}>{selectedOrder.orderNumber}</p>
+                      <p style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-main)' }}>#{selectedOrder.orderNumber}</p>
                     </div>
                     <div>
                       <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Cliente</p>
                       <p style={{ fontWeight: 700 }}>{selectedOrder.client?.name || '-'}</p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Producto</p>
+                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Producto Principal</p>
                       <p style={{ fontWeight: 700 }}>{defaultProductName}</p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Metros Planificados</p>
-                      <p style={{ fontWeight: 700 }}>{selectedOrder.technicalSpec?.meters || selectedOrder.plannedQty || '-'}</p>
+                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Medida del Material</p>
+                      <p style={{ fontWeight: 800, color: '#60a5fa' }}>{selectedOrder.technicalSpec?.materialMeasure || 'Sin especificar'}</p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Tipo de Trabajo</p>
-                      <p style={{ fontWeight: 700 }}>{selectedOrder.workType ? String(selectedOrder.workType).replaceAll('_', ' ') : '-'}</p>
+                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Corte</p>
+                      <p style={{ fontWeight: 700 }}>{selectedOrder.technicalSpec?.cut || 'Sin especificar'}</p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Muestra Aprobada</p>
-                      <p style={{ fontWeight: 700 }}>{selectedOrder.hasSample ? 'Sí (Aprobada)' : 'No'}</p>
+                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Cantidad Planificada</p>
+                      <p style={{ fontWeight: 700 }}>{selectedOrder.plannedQty ? `${selectedOrder.plannedQty} ${selectedOrder.unit || ''}` : '-'}</p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Lámina / Material</p>
-                      <p style={{ fontWeight: 700 }}>{selectedOrder.technicalSpec?.lamina || '-'}</p>
+                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Metros Totales a Imprimir</p>
+                      <p style={{ fontWeight: 800, color: 'var(--accent)' }}>
+                        {selectedOrder.technicalSpec?.meters != null
+                          ? `${selectedOrder.technicalSpec.meters} m`
+                          : (selectedOrder.unit?.toLowerCase().includes('metro') && selectedOrder.plannedQty ? `${selectedOrder.plannedQty} m` : '-')}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Lámina / Material Base</p>
+                      <p style={{ fontWeight: 700 }}>{selectedOrder.technicalSpec?.lamina || 'Sin especificar'}</p>
                     </div>
                     <div>
                       <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Tipo de Material</p>
@@ -1790,105 +1824,182 @@ export const ProductionProcess: React.FC = () => {
                       </p>
                     </div>
                     <div>
-                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Tubo / Núcleo</p>
+                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Impresión en</p>
                       <p style={{ fontWeight: 700 }}>{selectedOrder.technicalSpec?.tube || 'Sin definir'}</p>
                     </div>
+                    <div>
+                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Muestra Aprobada</p>
+                      <p style={{ fontWeight: 700 }}>{selectedOrder.hasSample ? 'Sí (Aprobada)' : 'No'}</p>
+                    </div>
+                    <div>
+                      <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Tipo de Trabajo</p>
+                      <p style={{ fontWeight: 700 }}>{selectedOrder.workType ? String(selectedOrder.workType).replaceAll('_', ' ') : '-'}</p>
+                    </div>
+
+                    {selectedOrder.products && selectedOrder.products.length > 1 && (
+                      <div style={{ gridColumn: '1 / -1', background: 'rgba(15, 23, 42, 0.5)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                        <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.5rem' }}>
+                          Detalle de Productos Planificados ({selectedOrder.products.length})
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.65rem' }}>
+                          {selectedOrder.products.map((pRow: any, idx: number) => (
+                            <div key={idx} style={{ padding: '0.5rem 0.75rem', borderRadius: '6px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                              <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem' }}>{pRow.product?.name || `Item ${idx + 1}`}</p>
+                              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                Cant: <b>{pRow.plannedQty || '-'} {selectedOrder.unit || ''}</b> {pRow.materialType ? `| Tipo: ${pRow.materialType}` : ''}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div style={{ gridColumn: '1 / -1' }}>
                       <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Observaciones de Administración</p>
-                      <p style={{ whiteSpace: 'pre-line', background: 'rgba(15, 23, 42, 0.45)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                      <p style={{ whiteSpace: 'pre-line', background: 'rgba(15, 23, 42, 0.45)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border)', margin: 0 }}>
                         {selectedOrder.specifications || selectedOrder.observations || 'Sin observaciones registradas'}
                       </p>
                     </div>
+
+                    {selectedOrder.technicalSpec?.techObservations && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.3rem' }}>Observaciones Técnicas Generales</p>
+                        <p style={{ whiteSpace: 'pre-line', background: 'rgba(15, 23, 42, 0.45)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border)', margin: 0 }}>
+                          {selectedOrder.technicalSpec.techObservations}
+                        </p>
+                      </div>
+                    )}
                   </FormSection>
 
-                  {/* Stage-Specific Technical Specifications */}
-                  {activeStage === 'IMPRESION' && (
-                    <div className="card">
-                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {/* Especificaciones de Impresión */}
+                  <div className="card" style={{
+                    border: activeStage === 'IMPRESION' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    boxShadow: activeStage === 'IMPRESION' ? '0 0 16px rgba(37, 99, 235, 0.15)' : 'none'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <Layers size={18} color="var(--primary)" />
                         Especificaciones de Impresión
                       </h4>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                        <DataPill label="Sentido de Salida" value={selectedOrder.technicalSpec?.printingExitSense || stageData.exitSense || '-'} />
-                        <DataPill label="Diámetro de Bobina" value={selectedOrder.technicalSpec?.printingCoilDiameter ? `${selectedOrder.technicalSpec.printingCoilDiameter} mm` : '-'} />
-                        <DataPill label="Tipo de Impresión" value={selectedOrder.technicalSpec?.printingType || '-'} />
-                        <DataPill label="Posición" value={selectedOrder.technicalSpec?.pie ? 'De Pie' : selectedOrder.technicalSpec?.cabeza ? 'De Cabeza' : '-'} />
-                        <DataPill label="Taca" value={selectedOrder.technicalSpec?.tacaRight ? 'Derecha' : selectedOrder.technicalSpec?.tacaLeft ? 'Izquierda' : '-'} />
-                        <DataPill label="Tratamiento Corona" value={selectedOrder.technicalSpec?.coronaTreatment ? 'Sí' : 'No'} />
-                      </div>
-
-                      {/* Color Orders / Anilox Sequence */}
-                      {selectedOrder.colorOrders?.length > 0 && (
-                        <div style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-                          <p style={{ fontSize: '0.78rem', textTransform: 'uppercase', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '0.65rem' }}>
-                            Secuencia de Colores y Clichés
-                          </p>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.5rem' }}>
-                            {selectedOrder.colorOrders.map((co: any, i: number) => (
-                              <div key={i} style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid var(--border)', padding: '0.65rem', borderRadius: '8px' }}>
-                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700 }}>CUERPO {co.order || i + 1}</span>
-                                <p style={{ fontWeight: 800, margin: '0.2rem 0 0 0', color: 'var(--accent)' }}>{co.colorName || 'Sin color'}</p>
-                                {co.anilox && <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>Anilox: {co.anilox}</p>}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                      {activeStage === 'IMPRESION' && (
+                        <span style={{ fontSize: '0.72rem', background: 'var(--primary)', color: 'white', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 800 }}>
+                          ETAPA ACTIVA
+                        </span>
                       )}
                     </div>
-                  )}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem' }}>
+                      <DataPill label="Sentido de Salida" value={selectedOrder.technicalSpec?.printingExitSense || '-'} />
+                      <DataPill label="Posición" value={selectedOrder.technicalSpec?.pie ? 'De Pie' : selectedOrder.technicalSpec?.cabeza ? 'De Cabeza' : '-'} />
+                      <DataPill label="Taca" value={selectedOrder.technicalSpec?.tacaRight ? 'Derecha' : selectedOrder.technicalSpec?.tacaLeft ? 'Izquierda' : '-'} />
+                      <DataPill label="Tipo de Impresión" value={selectedOrder.technicalSpec?.printingType || '-'} />
+                      <DataPill label="Diámetro de Bobina" value={selectedOrder.technicalSpec?.printingCoilDiameter ? `${selectedOrder.technicalSpec.printingCoilDiameter} mm` : '-'} />
+                      <DataPill label="Centrado de Clisé" value={selectedOrder.technicalSpec?.clisheAlignment || '-'} />
+                    </div>
 
-                  {activeStage === 'LAMINACION' && (
-                    <div className="card">
-                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    {/* Color Orders / Anilox Sequence */}
+                    {selectedOrder.colorOrders?.length > 0 && (
+                      <div style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                        <p style={{ fontSize: '0.78rem', textTransform: 'uppercase', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '0.65rem' }}>
+                          Secuencia de Colores, Clichés y Anilox ({selectedOrder.colorOrders.length})
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.65rem' }}>
+                          {selectedOrder.colorOrders.map((co: any, i: number) => (
+                            <div key={i} style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid var(--border)', padding: '0.65rem 0.8rem', borderRadius: '8px' }}>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700 }}>CUERPO {co.sequence || co.order || i + 1}</span>
+                              <p style={{ fontWeight: 800, margin: '0.2rem 0 0.15rem 0', color: 'var(--accent)', fontSize: '0.95rem' }}>{co.colorName || 'Sin color'}</p>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                {co.anilox && <span>Anilox: <strong style={{ color: 'var(--text-main)' }}>{co.anilox}</strong></span>}
+                                {co.formula && <span>Fórmula: <strong style={{ color: 'var(--text-main)' }}>{co.formula}</strong></span>}
+                                {co.lotNumber && <span>Lote: <strong style={{ color: 'var(--text-main)' }}>{co.lotNumber}</strong></span>}
+                                {co.changesToConsider && <span style={{ color: 'var(--warning)' }}>Obs: {co.changesToConsider}</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Especificaciones de Laminación */}
+                  <div className="card" style={{
+                    border: activeStage === 'LAMINACION' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    boxShadow: activeStage === 'LAMINACION' ? '0 0 16px rgba(37, 99, 235, 0.15)' : 'none'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <Droplets size={18} color="var(--primary)" />
                         Especificaciones de Laminación
                       </h4>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                        <DataPill label="Estructura / Material" value={selectedOrder.technicalSpec?.laminationStructure || selectedOrder.technicalSpec?.lamina || '-'} />
-                        <DataPill label="Adhesivo" value={selectedOrder.technicalSpec?.laminationAdhesive || '-'} />
-                        <DataPill label="Reticulante" value={selectedOrder.technicalSpec?.laminationReticulant || '-'} />
-                        <DataPill label="Diluyente" value={selectedOrder.technicalSpec?.laminationDiluent || '-'} />
-                        <DataPill label="Viscosidad" value={selectedOrder.technicalSpec?.laminationViscosity != null ? `${selectedOrder.technicalSpec.laminationViscosity} s` : '-'} />
-                        <DataPill label="Temp. Túnel" value={selectedOrder.technicalSpec?.laminationOvenTemp != null ? `${selectedOrder.technicalSpec.laminationOvenTemp} °C` : '-'} />
-                        <DataPill label="Temp. Calandra" value={selectedOrder.technicalSpec?.laminationCalenderTemp != null ? `${selectedOrder.technicalSpec.laminationCalenderTemp} °C` : '-'} />
-                        <DataPill label="Carga de Adhesivo" value={selectedOrder.technicalSpec?.laminationAdhesiveLoad != null ? `${selectedOrder.technicalSpec.laminationAdhesiveLoad} g/m²` : '-'} />
-                        <DataPill label="Diámetro Bobina" value={selectedOrder.technicalSpec?.printingCoilDiameter ? `${selectedOrder.technicalSpec.printingCoilDiameter} mm` : '-'} />
-                      </div>
-                      {selectedOrder.technicalSpec?.laminationObservations && (
-                        <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-                          <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.25rem' }}>Observaciones de Laminación</p>
-                          <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-main)', whiteSpace: 'pre-line' }}>{selectedOrder.technicalSpec.laminationObservations}</p>
-                        </div>
+                      {activeStage === 'LAMINACION' && (
+                        <span style={{ fontSize: '0.72rem', background: 'var(--primary)', color: 'white', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 800 }}>
+                          ETAPA ACTIVA
+                        </span>
                       )}
                     </div>
-                  )}
-
-                  {activeStage === 'REFILADO' && (
-                    <div className="card">
-                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Scissors size={18} color="var(--primary)" />
-                        Especificaciones de Refilado
-                      </h4>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem' }}>
-                        <DataPill label="Sentido Salida Cliente" value={selectedOrder.technicalSpec?.refiladoExitSense || '-'} />
-                        <DataPill label="De Pie" value={selectedOrder.technicalSpec?.refiladoDePie ? 'Sí' : 'No'} />
-                        <DataPill label="De Cabeza" value={selectedOrder.technicalSpec?.refiladoDeCabeza ? 'Sí' : 'No'} />
-                        <DataPill label="Taca Derecha" value={selectedOrder.technicalSpec?.refiladoTacaRight || '-'} />
-                        <DataPill label="Taca Izquierda" value={selectedOrder.technicalSpec?.refiladoTacaLeft || '-'} />
-                        <DataPill label="Ancho Espira" value={selectedOrder.technicalSpec?.refiladoAnchoEspira ?? '-'} />
-                        <DataPill label="Diámetro Bobinas CMM" value={selectedOrder.technicalSpec?.refiladoCoilDiameter ? `${selectedOrder.technicalSpec.refiladoCoilDiameter} mm` : '-'} />
-                        <DataPill label="Metros Refilado" value={selectedOrder.technicalSpec?.refiladoMeters ?? '-'} />
-                      </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem' }}>
+                      <DataPill label="Estructura / Material" value={selectedOrder.technicalSpec?.laminationStructure || selectedOrder.technicalSpec?.lamina || '-'} />
+                      <DataPill label="Adhesivo" value={selectedOrder.technicalSpec?.laminationAdhesive || '-'} />
+                      <DataPill label="Reticulante" value={selectedOrder.technicalSpec?.laminationReticulant || '-'} />
+                      <DataPill label="Diluyente" value={selectedOrder.technicalSpec?.laminationDiluent || '-'} />
+                      <DataPill label="Viscosidad" value={selectedOrder.technicalSpec?.laminationViscosity != null ? `${selectedOrder.technicalSpec.laminationViscosity} s` : '-'} />
+                      <DataPill label="Temp. Túnel" value={selectedOrder.technicalSpec?.laminationOvenTemp != null ? `${selectedOrder.technicalSpec.laminationOvenTemp} °C` : '-'} />
+                      <DataPill label="Temp. Calandra" value={selectedOrder.technicalSpec?.laminationCalenderTemp != null ? `${selectedOrder.technicalSpec.laminationCalenderTemp} °C` : '-'} />
+                      <DataPill label="Carga de Adhesivo" value={selectedOrder.technicalSpec?.laminationAdhesiveLoad != null ? `${selectedOrder.technicalSpec.laminationAdhesiveLoad} g/m²` : '-'} />
+                      <DataPill label="Diámetro Bobina" value={selectedOrder.technicalSpec?.printingCoilDiameter ? `${selectedOrder.technicalSpec.printingCoilDiameter} mm` : '-'} />
                     </div>
-                  )}
+                    {selectedOrder.technicalSpec?.laminationObservations && (
+                      <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                        <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '0.25rem' }}>Observaciones de Laminación</p>
+                        <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-main)', whiteSpace: 'pre-line' }}>{selectedOrder.technicalSpec.laminationObservations}</p>
+                      </div>
+                    )}
+                  </div>
 
-                  {activeStage === 'CONFECCION' && (
-                    <div className="card">
-                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <PackageCheck size={18} color="var(--primary)" />
-                        Especificaciones de Confección
+                  {/* Especificaciones de Refilado */}
+                  <div className="card" style={{
+                    border: activeStage === 'REFILADO' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    boxShadow: activeStage === 'REFILADO' ? '0 0 16px rgba(37, 99, 235, 0.15)' : 'none'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <h4 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Scissors size={18} color="var(--primary)" />
+                        Especificaciones de Refilado y Corte
                       </h4>
+                      {activeStage === 'REFILADO' && (
+                        <span style={{ fontSize: '0.72rem', background: 'var(--primary)', color: 'white', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 800 }}>
+                          ETAPA ACTIVA
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem' }}>
+                      <DataPill label="Sentido Salida Cliente" value={selectedOrder.technicalSpec?.refiladoExitSense || '-'} />
+                      <DataPill label="De Pie" value={selectedOrder.technicalSpec?.refiladoDePie ? 'Sí' : 'No'} />
+                      <DataPill label="De Cabeza" value={selectedOrder.technicalSpec?.refiladoDeCabeza ? 'Sí' : 'No'} />
+                      <DataPill label="Taca Derecha" value={selectedOrder.technicalSpec?.refiladoTacaRight || '-'} />
+                      <DataPill label="Taca Izquierda" value={selectedOrder.technicalSpec?.refiladoTacaLeft || '-'} />
+                      <DataPill label="Ancho Espira" value={selectedOrder.technicalSpec?.refiladoAnchoEspira != null ? `${selectedOrder.technicalSpec.refiladoAnchoEspira} mm` : '-'} />
+                      <DataPill label="Diámetro Bobinas CMM" value={selectedOrder.technicalSpec?.refiladoCoilDiameter ? `${selectedOrder.technicalSpec.refiladoCoilDiameter} mm` : '-'} />
+                      <DataPill label="Metros Refilado" value={selectedOrder.technicalSpec?.refiladoMeters != null ? `${selectedOrder.technicalSpec.refiladoMeters} m` : '-'} />
+                    </div>
+                  </div>
+
+                  {/* Especificaciones de Confección */}
+                  {(selectedOrder.estimatedBagQty || selectedOrder.workType?.toLowerCase().includes('bolsa') || activeStage === 'CONFECCION') && (
+                    <div className="card" style={{
+                      border: activeStage === 'CONFECCION' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                      boxShadow: activeStage === 'CONFECCION' ? '0 0 16px rgba(37, 99, 235, 0.15)' : 'none'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <h4 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <PackageCheck size={18} color="var(--primary)" />
+                          Especificaciones de Confección
+                        </h4>
+                        {activeStage === 'CONFECCION' && (
+                          <span style={{ fontSize: '0.72rem', background: 'var(--primary)', color: 'white', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 800 }}>
+                            ETAPA ACTIVA
+                          </span>
+                        )}
+                      </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem' }}>
                         <DataPill label="Tipo de Bolsa / Trabajo" value={selectedOrder.workType ? String(selectedOrder.workType).replaceAll('_', ' ') : '-'} />
                         <DataPill label="Cantidad Estimada" value={selectedOrder.estimatedBagQty ? `${selectedOrder.estimatedBagQty} bolsas` : '-'} />
@@ -1897,6 +2008,7 @@ export const ProductionProcess: React.FC = () => {
                       </div>
                     </div>
                   )}
+                  </div>
 
                   {/* Ficha Técnica General de Cliente */}
                   <div className="card" style={{ border: '1px solid rgba(59, 130, 246, 0.3)', background: 'rgba(30, 41, 59, 0.4)' }}>

@@ -1483,9 +1483,50 @@ export const reopenFinishedOrder = async (id: number, actor?: ActorContext) => {
 export const deleteOrder = async (id: number, actor?: ActorContext) => {
   ensureAdmin(actor);
 
-  return await prisma.productionOrder.delete({
-    where: { id }
-  });
+  return await prisma.$transaction(async (tx) => {
+    await tx.technicalSpec.deleteMany({ where: { orderId: id } });
+    await tx.colorOrder.deleteMany({ where: { orderId: id } });
+    await tx.orderProduct.deleteMany({ where: { orderId: id } });
+    await tx.orderOperator.deleteMany({ where: { orderId: id } });
+    await tx.processChecklist.deleteMany({ where: { orderId: id } });
+    await tx.qualityControl.deleteMany({ where: { orderId: id } });
+    await tx.finalInspection.deleteMany({ where: { orderId: id } });
+    await tx.consumption.deleteMany({ where: { orderId: id } });
+    await tx.stockMovement.deleteMany({ where: { orderId: id } });
+
+    const processes = await tx.productionProcess.findMany({ where: { orderId: id }, select: { id: true } });
+    for (const p of processes) {
+      await tx.materialLot.deleteMany({ where: { processId: p.id } });
+      await tx.processMetricEntry.deleteMany({ where: { processId: p.id } });
+      await tx.processScrapEntry.deleteMany({ where: { processId: p.id } });
+      await tx.processTimeLog.deleteMany({ where: { processId: p.id } });
+
+      const print = await tx.processPrinting.findUnique({ where: { processId: p.id }, select: { id: true } });
+      if (print) {
+        await tx.processPrintingColor.deleteMany({ where: { printingId: print.id } });
+        await tx.processPrinting.delete({ where: { id: print.id } });
+      }
+
+      await tx.processLamination.deleteMany({ where: { processId: p.id } });
+
+      const ref = await tx.processRefilado.findUnique({ where: { processId: p.id }, select: { id: true } });
+      if (ref) {
+        await tx.refiladoOutputBobbin.deleteMany({ where: { refiladoId: ref.id } });
+        await tx.processRefilado.delete({ where: { id: ref.id } });
+      }
+
+      const conf = await tx.processConfeccion.findUnique({ where: { processId: p.id }, select: { id: true } });
+      if (conf) {
+        await tx.processConfeccionOutput.deleteMany({ where: { confeccionId: conf.id } });
+        await tx.processConfeccion.delete({ where: { id: conf.id } });
+      }
+    }
+    await tx.productionProcess.deleteMany({ where: { orderId: id } });
+
+    return await tx.productionOrder.delete({
+      where: { id }
+    });
+  }, TRANSACTION_OPTIONS);
 };
 
 export const exportOrdersCSV = async (machineId?: number, month?: string) => {
