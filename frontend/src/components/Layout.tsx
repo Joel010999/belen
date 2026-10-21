@@ -43,8 +43,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <Bell size={20} style={{ cursor: 'pointer' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <div className="mobile-hidden" style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)', margin: 0 }}>{user?.name}</p>
-                <p style={{ fontSize: '0.75rem', margin: 0 }}>{user?.role === 'ADMIN' ? 'Administrador' : 'Operario de Máquina'}</p>
+                <p style={{ fontSize: '0.75rem', margin: 0 }}>
+                  {user?.role === 'ADMIN' ? 'Administrador' : user?.role === 'ENCARGADO_PLANTA' ? 'Encargado de Planta' : user?.role === 'VENDEDOR' ? 'Vendedor' : 'Operario de Máquina'}
+                </p>
               </div>
               <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
                  <User size={18} />

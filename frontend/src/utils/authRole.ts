@@ -1,4 +1,4 @@
-export type AppRole = 'ADMIN' | 'MACHINE';
+export type AppRole = 'ADMIN' | 'MACHINE' | 'ENCARGADO_PLANTA' | 'VENDEDOR';
 
 export const normalizeRole = (role?: string): AppRole => {
   const normalized = String(role || 'ADMIN')
@@ -8,6 +8,9 @@ export const normalizeRole = (role?: string): AppRole => {
     .replace(/[\u0300-\u036f]/g, '');
 
   if (!normalized || normalized.includes('ADMIN')) return 'ADMIN';
+
+  if (normalized.includes('ENCARGADO')) return 'ENCARGADO_PLANTA';
+  if (normalized.includes('VENDEDOR')) return 'VENDEDOR';
 
   if (
     normalized === 'MACHINE' ||

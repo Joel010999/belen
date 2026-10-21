@@ -11,6 +11,7 @@ import { LoginPage } from './pages/LoginPage';
 import { AuditLogs } from './pages/AuditLogs';
 import { CostDashboard } from './pages/CostDashboard';
 import { OrderHistory } from './pages/OrderHistory';
+import { ClientSheetsView } from './pages/ClientSheetsView';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -22,14 +23,41 @@ const AppContent = () => {
   if (loading) return null;
   if (!user) return <LoginPage />;
 
+  const isEncargado = (user?.role || '').toUpperCase() === 'ENCARGADO_PLANTA';
+
   return (
     <Router>
       <Layout>
         <ErrorBoundary>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/ordenes" element={<OrdersList />} />
-            <Route path="/produccion" element={<ProductionProcess />} />
+            <Route
+              path="/"
+              element={isEncargado ? <Navigate to="/hojas-clientes" replace /> : <Dashboard />}
+            />
+            <Route
+              path="/hojas-clientes"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'ENCARGADO_PLANTA']}>
+                  <ClientSheetsView />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/ordenes"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'MACHINE', 'VENDEDOR']}>
+                  <OrdersList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/produccion"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'MACHINE']}>
+                  <ProductionProcess />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/ordenes/nueva"
               element={
@@ -46,7 +74,14 @@ const AppContent = () => {
                 </ProtectedRoute>
               }
             />
-            <Route path="/ordenes/:id" element={<OrderDetail />} />
+            <Route
+              path="/ordenes/:id"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'MACHINE', 'VENDEDOR']}>
+                  <OrderDetail />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/stock"
               element={
@@ -79,8 +114,15 @@ const AppContent = () => {
                 </ProtectedRoute>
               }
             />
-            <Route path="/historial" element={<OrderHistory />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route
+              path="/historial"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'MACHINE', 'VENDEDOR']}>
+                  <OrderHistory />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<Navigate to={isEncargado ? '/hojas-clientes' : '/'} replace />} />
           </Routes>
         </ErrorBoundary>
       </Layout>

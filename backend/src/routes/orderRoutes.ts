@@ -4,8 +4,9 @@ import { authenticateToken, requireRoles } from '../middleware/authMiddleware';
 
 const router = Router();
 
-// All order routes require a valid session token
+// All order routes require a valid session token and authorized roles
 router.use(authenticateToken);
+router.use(requireRoles('ADMIN', 'MACHINE', 'VENDEDOR'));
 
 // Creation, deletion and financial cost stats require ADMIN
 router.post('/', requireRoles('ADMIN', 'VENDEDOR'), orderController.createOrder);

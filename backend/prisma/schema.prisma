@@ -15,6 +15,7 @@ model Client {
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
   orders    ProductionOrder[]
+  sheets    ClientSheet[]
 }
 
 model Product {
@@ -453,9 +454,11 @@ model User {
   exportBatches    ExportBatch[]
   importLogs       ImportLog[]
   ordersCreated    ProductionOrder[]
-  finalInspections FinalInspection[] @relation("FinalInspectionInspector")
-  operator         Operator?         @relation(fields: [operatorId], references: [id])
-  machine          Machine?          @relation(fields: [machineId], references: [id])
+  finalInspections    FinalInspection[] @relation("FinalInspectionInspector")
+  clientSheetsCreated ClientSheet[]     @relation("ClientSheetCreator")
+  clientSheetsUpdated ClientSheet[]     @relation("ClientSheetUpdater")
+  operator            Operator?         @relation(fields: [operatorId], references: [id])
+  machine             Machine?          @relation(fields: [machineId], references: [id])
 }
 
 model Operator {
@@ -600,3 +603,48 @@ model IdempotencyRecord {
   @@index([scope])
 }
 
+model ClientSheet {
+  id                      Int               @id @default(autoincrement())
+  clientId                Int
+  name                    String
+  productReference        String?
+  cylinderSize            String?
+  printingMeasure         String?
+  materialType            String?
+  speed                   String?
+  tunnelTemp              String?
+  coilDisposition         String?
+  orientationDisplacement String?
+  generalObservations     String?           @db.Text
+  technicalNotes          String?           @db.Text
+  archived                Boolean           @default(false)
+  createdById             Int?
+  updatedById             Int?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+
+  client                  Client            @relation(fields: [clientId], references: [id])
+  creator                 User?             @relation("ClientSheetCreator", fields: [createdById], references: [id])
+  updater                 User?             @relation("ClientSheetUpdater", fields: [updatedById], references: [id])
+  bodies                  ClientSheetBody[]
+
+  @@index([clientId])
+  @@index([archived])
+}
+
+model ClientSheetBody {
+  id             Int         @id @default(autoincrement())
+  sheetId        Int
+  bodyOrder      Int
+  colorName      String
+  inkReference   String?
+  brandOrCode    String?
+  specificParams String?
+  observations   String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  sheet          ClientSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+
+  @@index([sheetId, bodyOrder])
+}

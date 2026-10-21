@@ -2,7 +2,7 @@ import axios from 'axios';
 import { normalizeRole } from '../utils/authRole';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3001/api')
+  baseURL: import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:3001/api' : '/api')
 });
 
 api.interceptors.request.use((config) => {

@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -7,7 +6,8 @@ import {
   Package,
   FileUp,
   X,
-  History
+  History,
+  FileText
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -16,6 +16,7 @@ import styles from './Sidebar.module.css';
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['ADMIN', 'MACHINE'] },
   { icon: ClipboardList, label: 'Ordenes de Produccion', path: '/ordenes', roles: ['ADMIN', 'MACHINE'] },
+  { icon: FileText, label: 'Hojas de clientes', path: '/hojas-clientes', roles: ['ADMIN', 'ENCARGADO_PLANTA'] },
   { icon: Factory, label: 'Operacion en Planta', path: '/produccion', roles: ['ADMIN', 'MACHINE'] },
   { icon: History, label: 'Historico de Ordenes', path: '/historial', roles: ['ADMIN', 'MACHINE'] },
   { icon: Package, label: 'Stock Operativo', path: '/stock', roles: ['ADMIN'] },

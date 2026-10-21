@@ -24,7 +24,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     const hasRole = allowedRoles.some((role) => role.toUpperCase() === userRole);
 
     if (!hasRole) {
-      return <Navigate to={redirectTo} replace />;
+      const destination = (userRole === 'ENCARGADO_PLANTA' && redirectTo === '/') ? '/hojas-clientes' : redirectTo;
+      return <Navigate to={destination} replace />;
     }
   }
 

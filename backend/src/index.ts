@@ -6,6 +6,7 @@ import importRoutes from './routes/importRoutes';
 import orderRoutes from './routes/orderRoutes';
 import authRoutes from './routes/authRoutes';
 import exportRoutes from './routes/exportRoutes';
+import clientSheetRoutes from './routes/clientSheetRoutes';
 import { getCurrentUsdExchangeRate, saveManualUsdExchangeRate } from './services/exchangeRateService';
 import { authenticateToken, requireRoles } from './middleware/authMiddleware';
 import path from 'path';
@@ -41,8 +42,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/export', exportRoutes);
+app.use('/api/client-sheets', clientSheetRoutes);
 
-// Master Data Routes (Authenticated users can read)
+// Master Data Routes (Authenticated users can read basic client list)
 app.get('/api/clients', authenticateToken, async (req, res) => res.json(await prisma.client.findMany()));
 
 // Ficha Tecnica por Cliente (Persistencia mediante SystemSetting aislada)
@@ -78,10 +80,10 @@ app.put('/api/clients/:id/technical-sheet', authenticateToken, requireRoles('ADM
     res.status(500).json({ error: e.message });
   }
 });
-app.get('/api/products', authenticateToken, async (req, res) => res.json(await prisma.product.findMany({ include: { stock: true } })));
-app.get('/api/machines', authenticateToken, async (req, res) => res.json(await prisma.machine.findMany()));
-app.get('/api/operators', authenticateToken, async (req, res) => res.json(await prisma.operator.findMany()));
-app.get('/api/supplies', authenticateToken, async (req, res) => res.json(await prisma.supply.findMany({ include: { stock: true } })));
+app.get('/api/products', authenticateToken, requireRoles('ADMIN', 'MACHINE', 'VENDEDOR'), async (req, res) => res.json(await prisma.product.findMany({ include: { stock: true } })));
+app.get('/api/machines', authenticateToken, requireRoles('ADMIN', 'MACHINE', 'VENDEDOR'), async (req, res) => res.json(await prisma.machine.findMany()));
+app.get('/api/operators', authenticateToken, requireRoles('ADMIN', 'MACHINE', 'VENDEDOR'), async (req, res) => res.json(await prisma.operator.findMany()));
+app.get('/api/supplies', authenticateToken, requireRoles('ADMIN', 'MACHINE', 'VENDEDOR'), async (req, res) => res.json(await prisma.supply.findMany({ include: { stock: true } })));
 
 app.get('/api/exchange-rate/usd-official', authenticateToken, async (req, res) => {
   try {
@@ -151,9 +153,12 @@ app.put('/api/stock/price', authenticateToken, requireRoles('ADMIN'), async (req
   }
 });
 
-app.get('/api/audit', authenticateToken, requireRoles('ADMIN'), async (req, res) => {
+app.get('/api/audit', authenticateToken, requireRoles('ADMIN', 'ENCARGADO_PLANTA'), async (req: any, res) => {
   try {
+    const isEncargado = (req.user?.role || '').toUpperCase() === 'ENCARGADO_PLANTA';
+    const where = isEncargado ? { entity: { in: ['ClientSheet', 'ClientSheetBody'] } } : {};
     const logs = await prisma.systemAuditLog.findMany({
+      where,
       orderBy: { date: 'desc' },
       take: 1000 // limit to last 1000 for performance
     });
