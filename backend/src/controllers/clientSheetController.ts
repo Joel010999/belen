@@ -346,7 +346,7 @@ export const duplicateClientSheet = async (req: AuthenticatedRequest, res: Respo
       return res.status(400).json({ error: 'ID de hoja técnica inválido' });
     }
 
-    const { targetName } = req.body;
+    const targetName = req.body?.targetName || req.body?.newName || req.body?.name;
 
     const source = await prisma.clientSheet.findUnique({
       where: { id },
