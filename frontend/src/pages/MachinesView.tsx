@@ -23,8 +23,8 @@ export const MachinesView: React.FC = () => {
     if (loading) return <div style={{ padding: '3rem', textAlign: 'center' }}>Cargando máquinas...</div>;
 
     return (
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
+        <div style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '2.5rem' }}>
                 <div>
                     <h1 style={{ fontSize: '2.5rem', fontWeight: 800 }}>Configuración de Máquinas</h1>
                     <p style={{ color: 'var(--text-muted)' }}>Gestión de activos físicos de la planta.</p>

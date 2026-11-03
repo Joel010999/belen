@@ -317,7 +317,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
       </div>
 
       {canViewCosts && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) 1fr auto', gap: '1rem', alignItems: 'end', marginBottom: '1.5rem', backgroundColor: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '14px', padding: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '1rem', alignItems: 'end', marginBottom: '1.5rem', backgroundColor: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '14px', padding: '1rem' }}>
           <div>
             <label className="label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <DollarSign size={16} /> Dolar usado para calculo
@@ -343,14 +343,14 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
             onClick={fetchExchangeRate}
             disabled={exchangeRateLoading}
             className="btn"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}
           >
             <RefreshCw size={16} /> {exchangeRateLoading ? 'Actualizando...' : 'Actualizar BCRA'}
           </button>
         </div>
       )}
 
-      <div style={{ overflowX: 'auto' }}>
+      <div style={{ width: '100%', overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1.5rem' }}>
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
@@ -363,13 +363,13 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
               {canViewCosts && <th style={{ padding: '0.75rem', textAlign: 'right' }}>Precio USD</th>}
               {canViewCosts && <th style={{ padding: '0.75rem', textAlign: 'right' }}>Total USD</th>}
               {canViewCosts && <th style={{ padding: '0.75rem', textAlign: 'right' }}>Total ARS</th>}
-              <th style={{ padding: '0.75rem', width: '50px' }}></th>
+              <th style={{ padding: '0.75rem', width: '44px' }}></th>
             </tr>
           </thead>
           <tbody>
             {currentRows.map((item, idx) => (
               <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background-color 0.2s' }}>
-                <td style={{ padding: '0.75rem' }}>
+                <td style={{ padding: '0.6rem', minWidth: '140px' }}>
                   <select 
                     value={item.supplyId || ''} 
                     onChange={(e) => {
@@ -388,7 +388,7 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
                       }
                     }}
                     className="input-field"
-                    style={{ width: '100%', minWidth: '150px', padding: '0.6rem', fontSize: '0.9rem', backgroundColor: 'rgba(0,0,0,0.2)' }}
+                    style={{ width: '100%', padding: '0.6rem', fontSize: '0.9rem', backgroundColor: 'rgba(0,0,0,0.2)' }}
                   >
                     <option value="">Seleccione insumo...</option>
                     {(!item.supplyId && (item.colorName || item.name)) && (
@@ -399,37 +399,37 @@ export const OrderConsumptions = forwardRef<ConsumptionsRef, ConsumptionsProps>(
                     ))}
                   </select>
                 </td>
-                <td style={{ padding: '0.75rem', fontWeight: 800, color: 'var(--text-muted)' }}>
+                <td style={{ padding: '0.6rem', fontWeight: 800, color: 'var(--text-muted)' }}>
                   {getSupplyCode(item)}
                 </td>
-                <td style={{ padding: '0.75rem' }}>
+                <td style={{ padding: '0.6rem' }}>
                   <input
                     type="text"
                     value={item.lotNumber || ''}
                     onChange={(e) => activeTab === 'PRINTING' ? handlePrintingChange(idx, 'lotNumber', e.target.value) : handleLaminationChange(idx, 'lotNumber', e.target.value)}
                     placeholder="Lote"
                     className="input-field"
-                    style={{ width: '120px', padding: '0.6rem', fontSize: '0.9rem', backgroundColor: 'rgba(0,0,0,0.2)' }}
+                    style={{ width: '100%', minWidth: '80px', padding: '0.6rem', fontSize: '0.9rem', backgroundColor: 'rgba(0,0,0,0.2)' }}
                   />
                 </td>
-                <td style={{ padding: '0.75rem' }}>
+                <td style={{ padding: '0.6rem' }}>
                   <input 
                     type="text" 
                     value={item.loads} 
                     onChange={(e) => activeTab === 'PRINTING' ? handlePrintingChange(idx, 'loads', e.target.value) : handleLaminationChange(idx, 'loads', e.target.value)}
                     placeholder="25+20"
                     className="input-field"
-                    style={{ width: '120px', padding: '0.6rem', fontSize: '0.9rem', backgroundColor: 'rgba(0,0,0,0.2)' }}
+                    style={{ width: '100%', minWidth: '80px', padding: '0.6rem', fontSize: '0.9rem', backgroundColor: 'rgba(0,0,0,0.2)' }}
                   />
                 </td>
-                <td style={{ padding: '0.75rem' }}>
+                <td style={{ padding: '0.6rem' }}>
                   <input 
                     type="number" 
                     value={item.endValue} 
                     onChange={(e) => activeTab === 'PRINTING' ? handlePrintingChange(idx, 'endValue', e.target.value) : handleLaminationChange(idx, 'endValue', e.target.value)}
                     placeholder="0"
                     className="input-field"
-                    style={{ width: '100px', padding: '0.6rem', fontSize: '0.9rem', backgroundColor: 'rgba(0,0,0,0.2)' }}
+                    style={{ width: '100%', minWidth: '70px', padding: '0.6rem', fontSize: '0.9rem', backgroundColor: 'rgba(0,0,0,0.2)' }}
                   />
                 </td>
                 <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 800, color: item.realQty < 0 ? 'var(--success)' : 'var(--primary)', fontSize: '1.2rem' }}>

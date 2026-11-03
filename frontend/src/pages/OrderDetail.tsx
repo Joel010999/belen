@@ -397,8 +397,8 @@ export const OrderDetail: React.FC = () => {
     : STAGES;
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', paddingBottom: '4rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+    <div style={{ width: '100%', paddingBottom: '4rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <Link to="/ordenes" style={{ color: 'var(--text-muted)' }}><ArrowLeft size={24} /></Link>
           <div>
@@ -477,14 +477,14 @@ export const OrderDetail: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))', gap: '2rem', alignItems: 'start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <FormSection title="Origen de la Orden" icon={<Cpu size={24} />}>
             <DataField label="Maquina de Creacion" value={order.machine ? `${order.machine.name} (${order.machine.code})` : 'Administracion'} />
             <DataField label="Clasificacion" value={order.classification} />
             <DataField label="Muestra Original" value={order.hasSample ? 'Si' : 'No'} />
             <DataField label="Trabajo" value={order.workType ? String(order.workType).replaceAll('_', ' ') : '-'} />
-            <div style={{ gridColumn: 'span 2' }}>
+            <div style={{ gridColumn: '1 / -1' }}>
               <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Operadores de Turno (Creacion)</p>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {order.operatorsText ? (
@@ -517,7 +517,7 @@ export const OrderDetail: React.FC = () => {
             <DataField label="Taca Derecha" value={order?.technicalSpec?.tacaRight ? 'Marcado' : 'Sin marcar'} />
             <DataField label="Taca Izquierda" value={order?.technicalSpec?.tacaLeft ? 'Marcado' : 'Sin marcar'} />
             <DataField label="Clise Centrado" value={order?.technicalSpec?.clisheAlignment} />
-            <div style={{ gridColumn: 'span 2', borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+            <div style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: '0.5rem' }}>
               <p style={{ fontSize: '0.75rem', fontWeight: 900, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Refiladora corte</p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.85rem' }}>
                 <DataField label="Sentido salida" value={order?.technicalSpec?.refiladoExitSense} />
@@ -530,18 +530,18 @@ export const OrderDetail: React.FC = () => {
                 <DataField label="Metros" value={order?.technicalSpec?.refiladoMeters != null ? `${order.technicalSpec.refiladoMeters} m` : '-'} />
               </div>
             </div>
-            <div style={{ gridColumn: 'span 2', marginTop: '1rem' }}>
+            <div style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
               <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Especificaciones / Observaciones</p>
               <p style={{ fontSize: '0.875rem', fontWeight: 500, whiteSpace: 'pre-line' }}>{order.specifications || order.observations || '-'}</p>
             </div>
-            <div style={{ gridColumn: 'span 2' }}>
+            <div style={{ gridColumn: '1 / -1' }}>
               <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Observaciones Tecnicas</p>
               <p style={{ fontSize: '0.875rem', fontWeight: 500, whiteSpace: 'pre-line' }}>{order?.technicalSpec?.techObservations || '-'}</p>
             </div>
           </FormSection>
 
           <FormSection title="Laminacion" icon={<FlaskConical size={24} />}>
-            <div style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.85rem' }}>
+            <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.85rem' }}>
               <DataField label="Material o Estructura" value={order?.technicalSpec?.laminationStructure} />
               <DataField label="Adhesivo" value={order?.technicalSpec?.laminationAdhesive} />
               <DataField label="Reticulante" value={order?.technicalSpec?.laminationReticulant} />
@@ -551,19 +551,19 @@ export const OrderDetail: React.FC = () => {
               <DataField label="Temp. Calandra (°C)" value={order?.technicalSpec?.laminationCalenderTemp != null ? `${order.technicalSpec.laminationCalenderTemp} °C` : '-'} />
               <DataField label="Carga de Adhesivo" value={order?.technicalSpec?.laminationAdhesiveLoad != null ? `${order.technicalSpec.laminationAdhesiveLoad} g/m²` : '-'} />
             </div>
-            <div style={{ gridColumn: 'span 2', marginTop: '0.5rem' }}>
+            <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem' }}>
               <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Observaciones Laminacion</p>
               <p style={{ fontSize: '0.875rem', fontWeight: 500, whiteSpace: 'pre-line' }}>{order?.technicalSpec?.laminationObservations || '-'}</p>
             </div>
           </FormSection>
 
           <FormSection title="Aprobaciones y Control" icon={<ShieldCheck size={24} />}>
-            <div style={{ gridColumn: 'span 2', marginBottom: '0.25rem' }}>
+            <div style={{ gridColumn: '1 / -1', marginBottom: '0.25rem' }}>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                 Cada etapa se completa por separado. Primero revisas la etapa, luego guardas checklist y control de calidad solo si hace falta.
               </p>
             </div>
-            <div style={{ gridColumn: 'span 2', display: 'grid', gap: '1rem' }}>
+            <div style={{ gridColumn: '1 / -1', display: 'grid', gap: '1rem' }}>
               {visibleStages.map((stage) => (
                 <StageCard
                   key={stage.value}
@@ -578,7 +578,7 @@ export const OrderDetail: React.FC = () => {
           </FormSection>
 
           <FormSection title="Control de Producto Terminado" icon={<ShieldCheck size={24} />}>
-            <div style={{ gridColumn: 'span 2' }}>
+            <div style={{ gridColumn: '1 / -1' }}>
               {order.finalInspections?.length > 0 ? (
                 order.finalInspections.map((inspection: any) => (
                   <div key={inspection.id} className="card" style={{ marginBottom: '0.75rem', backgroundColor: 'rgba(255,255,255,0.02)' }}>
@@ -604,7 +604,7 @@ export const OrderDetail: React.FC = () => {
 
             {user?.role === 'ADMIN' && (
               <>
-                <div style={{ gridColumn: 'span 2' }}>
+                <div style={{ gridColumn: '1 / -1' }}>
                   <label className="label">Nombre encargado</label>
                   <input
                     className="input"
@@ -613,7 +613,7 @@ export const OrderDetail: React.FC = () => {
                     placeholder="Encargado del control antes de salida"
                   />
                 </div>
-                <div style={{ gridColumn: 'span 2', display: 'grid', gap: '0.85rem' }}>
+                <div style={{ gridColumn: '1 / -1', display: 'grid', gap: '0.85rem' }}>
                   {finishedControlForm.items.map((item, index) => (
                     <div key={index} style={{ border: '1px solid var(--border)', borderRadius: '14px', padding: '1rem', backgroundColor: 'rgba(255,255,255,0.025)', display: 'grid', gap: '0.85rem' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) auto', gap: '0.85rem', alignItems: 'end' }}>
@@ -668,7 +668,7 @@ export const OrderDetail: React.FC = () => {
                     Agregar producto
                   </button>
                 </div>
-                <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end' }}>
+                <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end' }}>
                   <button className="btn btn-primary" onClick={saveFinalInspection} disabled={savingInspection}>
                     <span>{savingInspection ? 'Guardando...' : 'Guardar control'}</span>
                   </button>
@@ -711,7 +711,7 @@ export const OrderDetail: React.FC = () => {
           </div>
 
           <FormSection title="Secuencia de Colores" icon={<Layers size={24} />}>
-            <div style={{ gridColumn: 'span 2' }}>
+            <div style={{ gridColumn: '1 / -1' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>

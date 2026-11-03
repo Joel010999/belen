@@ -55,13 +55,13 @@ export const QualityControl: React.FC = () => {
     if (loading) return <div style={{ padding: '3rem', textAlign: 'center' }}>Cargando...</div>;
 
     return (
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+        <div style={{ width: '100%' }}>
             <div style={{ marginBottom: '2.5rem' }}>
                 <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.04em' }}>Control de Calidad</h1>
                 <p style={{ color: 'var(--text-muted)' }}>Verificación final de parámetros técnicos por lote.</p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '2rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div className="card">
                         <label className="label">Seleccionar Orden en Planta</label>
@@ -83,7 +83,7 @@ export const QualityControl: React.FC = () => {
 
                 <div>
                     <FormSection title="Checklist de Inspección" icon={<FileSearch size={24} />}>
-                        <div style={{ gridColumn: 'span 2' }}>
+                        <div style={{ gridColumn: '1 / -1' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
                                     <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>

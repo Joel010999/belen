@@ -417,8 +417,8 @@ export const OrderForm: React.FC = () => {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: '1100px', margin: '0 auto', paddingBottom: '4rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
+    <form onSubmit={handleSubmit} style={{ width: '100%', paddingBottom: '4rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '2.5rem' }}>
         <div>
           <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.04em' }}>
             {isEditing ? 'Editar Nota de Pedido' : 'Nueva Nota de Pedido'}
@@ -467,7 +467,7 @@ export const OrderForm: React.FC = () => {
             ))}
           </div>
         </div>
-        <div style={{ gridColumn: 'span 2' }}>
+        <div style={{ gridColumn: '1 / -1' }}>
           <label className="label">Operador(es) / referencia de turno</label>
           <input
             name="operatorsText"
@@ -550,7 +550,7 @@ export const OrderForm: React.FC = () => {
             placeholder="Ej: 6000"
           />
         </div>
-        <div style={{ gridColumn: 'span 2' }}>
+        <div style={{ gridColumn: '1 / -1' }}>
           <h4 style={{ marginBottom: '1rem', color: 'var(--text-muted)' }}>Productos de la Orden</h4>
           {formData.products.map((productRow, index) => (
             <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '1rem', marginBottom: '1rem' }}>
@@ -609,7 +609,7 @@ export const OrderForm: React.FC = () => {
       </FormSection>
 
       <FormSection title="Descripcion del Trabajo" icon={<ClipboardList size={24} />}>
-        <div style={{ gridColumn: 'span 2' }}>
+        <div style={{ gridColumn: '1 / -1' }}>
           <label className="label">Descripcion / Especificaciones generales</label>
           <textarea
             name="specifications"
@@ -620,7 +620,7 @@ export const OrderForm: React.FC = () => {
             placeholder="Ej: Bolsa 16 x 20 x 40 / 1200 mts = 6000 bolsas"
           />
         </div>
-        <div style={{ gridColumn: 'span 2' }}>
+        <div style={{ gridColumn: '1 / -1' }}>
           <label className="label">Observaciones administrativas</label>
           <textarea
             name="observations"
@@ -761,7 +761,7 @@ export const OrderForm: React.FC = () => {
           <label className="label">Clise Centrado Izq / Der</label>
           <input name="technicalSpec.clisheAlignment" value={formData.technicalSpec.clisheAlignment} onChange={handleInputChange} type="text" className="input" placeholder="Ej: Centrado" />
         </div>
-        <div style={{ gridColumn: 'span 2', marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+        <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
           <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.85rem' }}>Refiladora corte</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem' }}>
             <div>
@@ -790,7 +790,7 @@ export const OrderForm: React.FC = () => {
             </div>
           </div>
         </div>
-        <div style={{ gridColumn: 'span 2' }}>
+        <div style={{ gridColumn: '1 / -1' }}>
           <label className="label">Observaciones Tecnicas</label>
           <textarea
             name="technicalSpec.techObservations"
@@ -835,7 +835,7 @@ export const OrderForm: React.FC = () => {
           <label className="label">Carga de adhesivo</label>
           <input name="technicalSpec.laminationAdhesiveLoad" value={formData.technicalSpec.laminationAdhesiveLoad} onChange={handleInputChange} type="number" step="0.001" className="input" />
         </div>
-        <div style={{ gridColumn: 'span 2' }}>
+        <div style={{ gridColumn: '1 / -1' }}>
           <label className="label">Observaciones de Laminación</label>
           <textarea
             name="technicalSpec.laminationObservations"
@@ -848,7 +848,7 @@ export const OrderForm: React.FC = () => {
       </FormSection>
 
       <FormSection title="Secuencia de Colores" icon={<Layers size={24} />}>
-        <div style={{ gridColumn: 'span 2' }}>
+        <div style={{ gridColumn: '1 / -1' }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
             <thead>
               <tr>

@@ -34,7 +34,7 @@ export const FormSection: React.FC<FormSectionProps> = ({ title, children, icon 
       </div>
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', 
         gap: '1.5rem' 
       }}>
         {children}

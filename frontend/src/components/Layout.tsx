@@ -8,9 +8,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <div className="layout-wrapper" style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="layout-wrapper" style={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
       <Sidebar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
-      <div className="main-content-wrapper" style={{ flex: 1, marginLeft: 260, display: 'flex', flexDirection: 'column', transition: 'margin-left 0.3s' }}>
+      <div className="main-content-wrapper" style={{ flex: 1, minWidth: 0, width: '100%', marginLeft: 260, display: 'flex', flexDirection: 'column', transition: 'margin-left 0.3s' }}>
         <header className="header-wrapper" style={{ 
           height: 64, 
           borderBottom: '1px solid var(--border)', 

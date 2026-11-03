@@ -1095,7 +1095,7 @@ export const ProductionProcess: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: '1600px', margin: '0 auto', paddingBottom: '3rem' }}>
+    <div style={{ width: '100%', paddingBottom: '3rem' }}>
       {/* Industrial Terminal Header */}
       <div style={{
         display: 'flex',
@@ -1110,7 +1110,7 @@ export const ProductionProcess: React.FC = () => {
         flexWrap: 'wrap',
         gap: '1rem'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <div style={{
             width: '52px',
             height: '52px',
@@ -1125,7 +1125,7 @@ export const ProductionProcess: React.FC = () => {
             <StageIcon size={28} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: '1.85rem', fontWeight: 900, letterSpacing: '-0.02em', margin: 0 }}>
                 Terminal de Planta
               </h1>
@@ -1151,6 +1151,26 @@ export const ProductionProcess: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          {selectedOrderId && (
+            <button
+              type="button"
+              onClick={() => setSelectedOrderId('')}
+              className="btn btn-secondary"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.7rem 1.15rem',
+                borderColor: 'var(--primary)',
+                color: 'white',
+                background: 'rgba(37, 99, 235, 0.25)',
+                fontWeight: 800
+              }}
+            >
+              <Layers size={16} />
+              <span>← Cambiar Orden ({queueOrders.length})</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={async () => {
@@ -1169,60 +1189,59 @@ export const ProductionProcess: React.FC = () => {
         </div>
       </div>
 
-      {/* Stage Selector Pills (locked if MACHINE role) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.85rem', marginBottom: '1.5rem' }}>
-        {STAGES.map((stage) => {
-          const isSelected = activeStage === stage.key;
-          const isLocked = user?.role === 'MACHINE' && user.machine?.type?.toUpperCase() !== stage.key;
-          const IconComponent = stage.icon;
-          return (
-            <button
-              key={stage.key}
-              type="button"
-              onClick={() => !isLocked && setActiveStage(stage.key)}
-              disabled={isLocked}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.85rem',
-                padding: '1rem 1.25rem',
-                borderRadius: '12px',
-                textAlign: 'left',
-                border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
-                background: isSelected
-                  ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(15, 23, 42, 0.95))'
-                  : 'rgba(30, 41, 59, 0.5)',
-                color: isSelected ? 'white' : 'var(--text-muted)',
-                opacity: isLocked ? 0.35 : 1,
-                cursor: isLocked ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: isSelected ? '0 0 16px rgba(37, 99, 235, 0.2)' : 'none'
-              }}
-            >
-              <div style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '8px',
-                background: isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: isSelected ? 'white' : 'var(--text-muted)'
-              }}>
-                <IconComponent size={20} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0, opacity: 0.7 }}>
-                  ETAPA
-                </p>
-                <p style={{ fontSize: '1rem', fontWeight: 800, margin: 0, color: isSelected ? 'white' : 'var(--text-main)' }}>
-                  {stage.label}
-                </p>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {/* Stage Selector Pills (shown when user can switch stages) */}
+      {user?.role !== 'MACHINE' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '0.85rem', marginBottom: '1.5rem' }}>
+          {STAGES.map((stage) => {
+            const isSelected = activeStage === stage.key;
+            const IconComponent = stage.icon;
+            return (
+              <button
+                key={stage.key}
+                type="button"
+                onClick={() => setActiveStage(stage.key)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.85rem',
+                  padding: '1rem 1.25rem',
+                  borderRadius: '12px',
+                  textAlign: 'left',
+                  border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
+                  background: isSelected
+                    ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(15, 23, 42, 0.95))'
+                    : 'rgba(30, 41, 59, 0.5)',
+                  color: isSelected ? 'white' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: isSelected ? '0 0 16px rgba(37, 99, 235, 0.2)' : 'none'
+                }}
+              >
+                <div style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '8px',
+                  background: isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: isSelected ? 'white' : 'var(--text-muted)'
+                }}>
+                  <IconComponent size={20} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0, opacity: 0.7 }}>
+                    ETAPA
+                  </p>
+                  <p style={{ fontSize: '1rem', fontWeight: 800, margin: 0, color: isSelected ? 'white' : 'var(--text-main)' }}>
+                    {stage.label}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Global Alerts */}
       {error && (
@@ -1267,97 +1286,90 @@ export const ProductionProcess: React.FC = () => {
         </div>
       )}
 
-      {/* Main Grid: Work Queue (Left) & Operational Detail (Right) */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(340px, 420px) minmax(0, 1fr)',
-        gap: '1.5rem',
-        alignItems: 'start'
-      }}>
-        {/* ===================== WORK QUEUE (Bandeja de Órdenes) ===================== */}
-        <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: 'calc(100vh - 180px)', position: 'sticky', top: '1rem' }}>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Layers size={18} color="var(--primary)" />
-                <h2 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0 }}>Bandeja de Trabajo</h2>
+      {/* Full-Width Adaptive Container: Shows Work Queue when no order is selected, or Full-Screen Operational Form when an order is selected */}
+      <div style={{ width: '100%' }}>
+        {/* ===================== WORK QUEUE (Bandeja de Órdenes a Pantalla Completa) ===================== */}
+        {!selectedOrder && (
+          <div className="card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Layers size={20} color="var(--primary)" />
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>Bandeja de Trabajo — Seleccione una Orden</h2>
+                <span style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  borderRadius: '999px',
+                  padding: '0.2rem 0.75rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: 'var(--text-muted)'
+                }}>
+                  {queueOrders.length} {queueOrders.length === 1 ? 'orden' : 'órdenes'}
+                </span>
               </div>
-              <span style={{
-                background: 'rgba(255,255,255,0.06)',
-                borderRadius: '999px',
-                padding: '0.2rem 0.65rem',
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                color: 'var(--text-muted)'
-              }}>
-                {queueOrders.length} {queueOrders.length === 1 ? 'orden' : 'órdenes'}
-              </span>
+
+              {/* Search & Status Filters inline */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', flex: '1 1 480px', justifyContent: 'flex-end' }}>
+                <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: '380px' }}>
+                  <Search size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input
+                    type="text"
+                    placeholder="Buscar orden, cliente o producto..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="input"
+                    style={{ paddingLeft: '2.4rem', fontSize: '0.9rem' }}
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Status Filter Pills */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(72px, 1fr))', gap: '0.4rem' }}>
+                  {[
+                    { key: 'ALL', label: 'Todas', count: counters.all },
+                    { key: 'IN_PROCESS', label: 'En Proc.', count: counters.inProcess },
+                    { key: 'PENDING', label: 'Pend.', count: counters.pending },
+                    { key: 'FINISHED', label: 'Listas', count: counters.finished }
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      type="button"
+                      onClick={() => setStatusFilter(f.key as any)}
+                      style={{
+                        padding: '0.5rem 0.6rem',
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        border: '1px solid',
+                        borderColor: statusFilter === f.key ? 'var(--primary)' : 'var(--border)',
+                        background: statusFilter === f.key ? 'rgba(37, 99, 235, 0.2)' : 'rgba(15, 23, 42, 0.5)',
+                        color: statusFilter === f.key ? 'white' : 'var(--text-muted)',
+                        textAlign: 'center'
+                      }}
+                    >
+                      <span>{f.label} ({f.count})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            {/* Search Input */}
-            <div style={{ position: 'relative', marginBottom: '0.85rem' }}>
-              <Search size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input
-                type="text"
-                placeholder="Buscar orden o cliente..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="input"
-                style={{ paddingLeft: '2.4rem', fontSize: '0.9rem' }}
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-
-            {/* Status Filter Pills */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.35rem' }}>
-              {[
-                { key: 'ALL', label: 'Todas', count: counters.all },
-                { key: 'IN_PROCESS', label: 'En Proc.', count: counters.inProcess },
-                { key: 'PENDING', label: 'Pend.', count: counters.pending },
-                { key: 'FINISHED', label: 'Listas', count: counters.finished }
-              ].map((f) => (
-                <button
-                  key={f.key}
-                  type="button"
-                  onClick={() => setStatusFilter(f.key as any)}
-                  style={{
-                    padding: '0.45rem 0.2rem',
-                    borderRadius: '8px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    border: '1px solid',
-                    borderColor: statusFilter === f.key ? 'var(--primary)' : 'var(--border)',
-                    background: statusFilter === f.key ? 'rgba(37, 99, 235, 0.2)' : 'rgba(15, 23, 42, 0.5)',
-                    color: statusFilter === f.key ? 'white' : 'var(--text-muted)',
-                    textAlign: 'center'
-                  }}
-                >
-                  <div>{f.label}</div>
-                  <div style={{ fontSize: '0.7rem', opacity: 0.75 }}>({f.count})</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Cards List */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.75rem',
-            overflowY: 'auto',
-            paddingRight: '0.25rem',
-            maxHeight: 'calc(100vh - 350px)'
-          }}>
+            {/* Cards Grid (Full width, no inner vertical scrollbar) */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
+              gap: '1rem'
+            }}>
             {queueOrders.length === 0 ? (
               <div style={{
+                gridColumn: '1 / -1',
                 textAlign: 'center',
                 padding: '2.5rem 1rem',
                 border: '1px dashed var(--border)',
@@ -1522,45 +1534,13 @@ export const ProductionProcess: React.FC = () => {
                 );
               })
             )}
-          </div>
-        </div>
-
-        {/* ===================== OPERATIONAL DETAIL (Ficha Operativa) ===================== */}
-        <div>
-          {!selectedOrder ? (
-            <div className="card" style={{
-              textAlign: 'center',
-              padding: '4.5rem 2rem',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '1rem',
-              color: 'var(--text-muted)'
-            }}>
-              <div style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '16px',
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid var(--border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Layers size={32} />
-              </div>
-              <div>
-                <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
-                  Seleccione una orden de la bandeja
-                </h3>
-                <p style={{ maxWidth: '420px', marginTop: '0.5rem', fontSize: '0.92rem' }}>
-                  Haga toque sobre cualquier tarjeta de la lista izquierda para cargar su ficha técnica, registrar producción, controlar mermas y completar calidad.
-                </p>
-              </div>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          </div>
+        )}
+
+        {/* ===================== OPERATIONAL DETAIL (Ficha Operativa a Pantalla Completa) ===================== */}
+        {selectedOrder && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', width: '100%' }}>
               {/* Top Operational Status & Main Actions Bar */}
               <div className="card" style={{
                 border: isStageInProcess
@@ -1575,7 +1555,23 @@ export const ProductionProcess: React.FC = () => {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.35rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrderId('')}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--text-main)',
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '8px',
+                          fontSize: '0.82rem',
+                          fontWeight: 800,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        ← Bandeja
+                      </button>
                       <span style={{ fontSize: '1.35rem', fontWeight: 900, color: 'var(--text-main)' }}>
                         Orden #{selectedOrder.orderNumber}
                       </span>
@@ -1732,13 +1728,13 @@ export const ProductionProcess: React.FC = () => {
                 </div>
               </div>
 
-              {/* Navigation Tabs for Operational Work */}
+              {/* Navigation Tabs for Operational Work (Responsive Grid, no horizontal scrollbar) */}
               <div style={{
-                display: 'flex',
-                gap: '0.5rem',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+                gap: '0.65rem',
                 borderBottom: '1px solid var(--border)',
-                paddingBottom: '0.5rem',
-                overflowX: 'auto'
+                paddingBottom: '0.75rem'
               }}>
                 {[
                   { key: 'METRICS', label: 'Producción & Métricas', icon: Sliders },
@@ -1756,16 +1752,16 @@ export const ProductionProcess: React.FC = () => {
                       style={{
                         display: 'flex',
                         alignItems: 'center',
+                        justifyContent: 'center',
                         gap: '0.6rem',
-                        padding: '0.85rem 1.4rem',
+                        padding: '0.85rem 1rem',
                         borderRadius: '10px',
                         fontWeight: 800,
                         fontSize: '0.92rem',
-                        border: isSelected ? '1px solid var(--primary)' : '1px solid transparent',
+                        border: isSelected ? '1px solid var(--primary)' : '1px solid rgba(255,255,255,0.06)',
                         background: isSelected ? 'rgba(37, 99, 235, 0.2)' : 'rgba(255,255,255,0.02)',
                         color: isSelected ? 'white' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap'
+                        cursor: 'pointer'
                       }}
                     >
                       <Icon size={18} color={isSelected ? 'var(--accent)' : 'currentColor'} />
@@ -2641,6 +2637,7 @@ export const ProductionProcess: React.FC = () => {
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'space-between',
+                              flexWrap: 'wrap',
                               background: 'rgba(15, 23, 42, 0.45)',
                               padding: '0.75rem 1rem',
                               borderRadius: '8px',
@@ -2678,7 +2675,7 @@ export const ProductionProcess: React.FC = () => {
                                   setChecklistItems(next);
                                 }}
                                 className="input"
-                                style={{ width: '180px', padding: '0.4rem 0.65rem', fontSize: '0.85rem' }}
+                                style={{ flex: '1 1 160px', maxWidth: '280px', padding: '0.4rem 0.65rem', fontSize: '0.85rem' }}
                                 placeholder="Valor / Observación"
                               />
                             )}
@@ -2768,9 +2765,8 @@ export const ProductionProcess: React.FC = () => {
                   </div>
                 </div>
               )}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* CONFIRMATION MODAL (Prevents Accidental Finishes / Closes) */}

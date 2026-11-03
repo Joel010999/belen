@@ -92,7 +92,7 @@ export const StockView: React.FC = () => {
     if (loading) return <div style={{ padding: '3rem', textAlign: 'center' }}>Consultando inventario...</div>;
 
     return (
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ width: '100%' }}>
             <div className="header-actions-wrap" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2rem' }}>
                 <div>
                     <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.04em' }}>Stock Operativo</h1>
@@ -105,7 +105,7 @@ export const StockView: React.FC = () => {
                             type="text" 
                             className="input" 
                             placeholder="Buscar por código o nombre..." 
-                            style={{ paddingLeft: '3rem', width: '300px' }}
+                            style={{ paddingLeft: '3rem', width: 'min(300px, 100%)' }}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
