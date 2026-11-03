@@ -1033,13 +1033,8 @@ const validateStagePrecedence = (order: any, stageToStart: string) => {
     throw new Error(`La etapa ${stageToStart} no forma parte de la planificacion de esta orden`);
   }
 
-  for (let i = 0; i < stageIndex; i++) {
-    const previousStage = plannedStages[i];
-    if (!isStageComplete(order, previousStage)) {
-      const prevLabel = PROCESS_TYPE_LABELS[previousStage] || previousStage;
-      throw new Error(`No se puede iniciar ${PROCESS_TYPE_LABELS[stageToStart] || stageToStart}: la etapa precedente (${prevLabel}) debe completarse primero`);
-    }
-  }
+  // Sequential stage blocking disabled: in plant operation, subsequent stages (e.g. LAMINACION)
+  // can start processing partial rolls while the previous stage (e.g. IMPRESION) is still running.
 };
 
 const validateStageHasProductionMetrics = (process: any, stage: string, observations?: string) => {
